@@ -1,5 +1,6 @@
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 # ========================================
 # Python / FastAPI / Alembic .gitignore
 # For projects using requirements.txt
@@ -128,6 +129,8 @@ site/
 =======
 =======
 >>>>>>> d23033a (Initial commit)
+=======
+>>>>>>> d23033a (Initial commit)
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
@@ -165,6 +168,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 <<<<<<< HEAD
+<<<<<<< HEAD
+>>>>>>> d23033a (Initial commit)
+=======
 >>>>>>> d23033a (Initial commit)
 =======
 >>>>>>> d23033a (Initial commit)
