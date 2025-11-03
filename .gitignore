@@ -1,0 +1,125 @@
+# ========================================
+# Python / FastAPI / Alembic .gitignore
+# For projects using requirements.txt
+# ========================================
+
+# ---- Python 기본 ----
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ---- 가상환경 ----
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# ---- 패키징 / 배포 ----
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ---- 로그 / 캐시 ----
+*.log
+*.tmp
+*.bak
+*.swp
+*.swo
+.cache/
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+nosetests.xml
+
+# ---- IDE / 편집기 ----
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# ---- 데이터베이스 ----
+*.db
+*.sqlite3
+*.sqlite3-journal
+
+# ---- FastAPI ----
+# Static & upload 폴더 (있다면)
+static/
+media/
+uploads/
+
+# Uvicorn log
+uvicorn.log
+
+# ---- Alembic ----
+alembic/versions/__pycache__/
+alembic/versions/*.pyc
+# 마이그레이션 파일 버전 관리 원하면 아래 주석 해제
+# alembic/versions/
+
+# ---- Docker ----
+docker-compose.override.yml
+*.pid
+*.tar
+*.log
+*.bak
+.docker/
+.dockerignore
+
+# ---- 환경 변수 파일 ----
+.env
+.env.*
+!env.example
+!.env.sample
+
+# ---- Jupyter / 노트북 ----
+.ipynb_checkpoints/
+*.ipynb
+
+# ---- OS 별 불필요한 파일 ----
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# ---- MyPy / Ruff / Linter ----
+.mypy_cache/
+.dmypy.json
+.ruff_cache/
+.pyre/
+.pytype/
+__pypackages__/
+
+# ---- Docs ----
+docs/_build/
+site/
+
+# ---- PyInstaller ----
+*.spec
+*.manifest
+
+# ---- 기타 ----
+*.pem
+*.key
+*.crt
+*.pfx
+*.bak
+*.orig

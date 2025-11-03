@@ -97,13 +97,12 @@ class MessageOut(BaseModel):
     content: str
     created_at: str
 
-
 class ThreadOut(BaseModel):
     id: str
     title: str
     summary: Optional[str] = None
-    tags: Optional[list] = []
+    tags: List[str] = Field(default_factory=list)  
     source_url: Optional[str] = None
     model: Optional[str] = None
     created_at: str
-    messages: List[MessageOut]
+    messages: List["MessageOut"]
