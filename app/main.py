@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 
 from app.core.config import settings
-from app.routes import health, threads, diag  
+from app.routes import health, auth
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -23,8 +23,9 @@ app.add_middleware(
 
 # 라우터 연결
 app.include_router(health.router)
-app.include_router(threads.router)
-app.include_router(diag.router)  # 개발 시만
+#app.include_router(threads.router)
+app.include_router(auth.router)
+
 
 # OpenAPI 서버 URL 커스터마이즈 (선택)
 def custom_openapi():
