@@ -3,6 +3,7 @@
 
 __pycache__/
 *.pyc
+.pyc
 
 # dependencies
 /node_modules
