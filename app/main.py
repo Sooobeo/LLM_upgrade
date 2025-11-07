@@ -1,4 +1,5 @@
 # app/main.py
+<<<<<<< HEAD
 from fastapi import FastAPI, Body, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
@@ -324,3 +325,44 @@ def sb_probe():
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", "ignore")
         return {"ok": False, "rest_status": e.code, "body": body[:300]}
+=======
+from fastapi import FastAPI, HTTPException
+import os, httpx
+
+app = FastAPI()
+
+@app.get("/health")
+def health():
+    return {"ok": True}
+
+@app.post("/auth/google/exchange-id-token")
+async def exchange_id_token(payload: dict):
+    # 기대 바디: { provider, id_token, client_id, (nonce?) }
+    required = ["provider", "id_token", "client_id"]
+    if any(k not in payload for k in required):
+        raise HTTPException(status_code=400, detail={"error":"missing fields","got":list(payload.keys())})
+
+    SUPABASE_URL = os.environ.get("SUPABASE_URL")    # e.g. https://<project>.supabase.co
+    SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY")
+    if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+        raise HTTPException(status_code=500, detail="missing env SUPABASE_URL / SUPABASE_ANON_KEY")
+
+    url = f"{SUPABASE_URL}/auth/v1/token?grant_type=id_token"
+    headers = {
+        "Content-Type": "application/json",
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": f"Bearer {SUPABASE_ANON_KEY}",
+    }
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.post(url, headers=headers, json=payload)
+
+    try:
+        data = r.json()
+    except Exception:
+        data = {"raw": r.text}
+
+    if r.status_code >= 400:
+        raise HTTPException(status_code=r.status_code, detail=data)
+
+    return data
+>>>>>>> 014db905644aa82de750fb26a1e5f02c9d2cde07
