@@ -86,3 +86,37 @@ def list_threads(sb, owner_id: str, limit: int = 10, offset: int = 0) -> List[Di
     if getattr(r, "error", None):
         raise RuntimeError(f"threads list error: {r.error}")
     return r.data or []
+
+
+## 20251113 추가기능 - owner_id 기준으로 messages 검색
+def search_messages_by_owner(
+    sb,
+    owner_id: str,
+    q: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    asc: bool = False,
+) -> List[Dict[str, Any]]:
+    """
+    owner_id 기준으로, 그 유저의 모든 threads에 속한 messages를 가져오는 함수.
+    선택적으로 q(검색어)로 content를 필터링한다.
+    """
+    # Supabase REST의 select 문자열과 동일한 구조
+    select_cols = "thread_id,role,content,created_at,threads!inner(id,title,owner_id)"
+
+    query = (
+        sb.table("messages")
+        .select(select_cols)
+        .eq("threads.owner_id", owner_id)   # JOIN한 threads의 owner_id 기준 필터
+        .order("created_at", desc=not asc)
+        .range(offset, offset + max(0, limit) - 1)
+    )
+
+    # 검색어 q가 있으면 content 기준 ilike 필터 적용
+    if q:
+        query = query.ilike("content", f"%{q}%")
+
+    r = query.execute()
+    if getattr(r, "error", None):
+        raise RuntimeError(f"messages search error: {r.error}")
+    return r.data or []
