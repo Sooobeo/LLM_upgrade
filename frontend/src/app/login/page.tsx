@@ -1,13 +1,15 @@
 /*
 아이디, 비밀번호 입력
-로그인 버튼 --> FasrtAPI or /autj/token 요청
-성공 시 supabase로 user_id 받아서 localStorage나 cookie에 저장
-/threads 페이지로 이동
+로그인 버튼 -> FastAPI /auth/login 요청
+성공 여부랑 상관없이 (개발 단계에서는)
+토큰/유저 정보를 저장하고 /threads로 이동
 */
 
 "use client";
 
 import { FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
+import { auth } from "@/lib/auth";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -15,34 +17,48 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const router = useRouter();
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
     try {
-      const res = await fetch("http://localhost:8000/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, password }),
-      });
+      let data: any = null;
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data?.detail ?? "로그인에 실패했습니다.");
+      try {
+        const res = await fetch("http://localhost:8000/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+
+        // 응답이 JSON이면 읽고, 아니면 그냥 무시
+        try {
+          data = await res.json();
+        } catch {
+          data = null;
+        }
+
+        console.log("login response:", res.status, data);
+      } catch (networkError) {
+        console.warn("네트워크 에러 (그래도 개발용으로 계속 진행):", networkError);
       }
 
-      const data = await res.json();
-      // TODO: 백엔드에서 돌려주는 토큰/유저정보 구조에 맞게 수정
-      console.log("login success:", data);
+      // 백엔드 응답에 access_token / user_id가 있으면 쓰고,
+      // 없으면 임시(dev) 값으로 채워서 진행
+      const token = data?.access_token ?? `dev-token-${email}`;
+      const userId = data?.user_id ?? email;
 
-      alert("로그인 성공!");
-      // 나중에: localStorage.setItem("access_token", data.access_token);
-      // 그리고 router.push("/threads") 같은 거 추가하면 됨
-    } catch (err: any) {
-      setError(err.message ?? "알 수 없는 오류가 발생했습니다.");
+      auth.setToken(token);
+      auth.setUserId(userId);
+
+      // 로그인 성공했다고 치고 /threads로 이동
+      router.push("/threads");
+    } catch (err) {
+      console.error(err);
+      setError("로그인 처리 중 오류가 발생했습니다.");
     } finally {
       setLoading(false);
     }
@@ -100,4 +116,3 @@ export default function LoginPage() {
     </div>
   );
 }
-
