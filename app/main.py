@@ -32,30 +32,6 @@ app.include_router(thread.router)
 app.include_router(auth.router)
 
 
-# ==============================
-# 0) 임시 로그인 엔드포인트 (FE 연동용)
-#    POST /auth/login
-# ==============================
-class LoginRequest(BaseModel):
-    email: str
-    password: str
-
-
-@app.post("/auth/login")
-def login(req: LoginRequest):
-    """
-    임시 로그인 엔드포인트 (개발용)
-
-    - 어떤 이메일/비밀번호가 와도 일단 "성공" 응답을 줌
-    - 나중에 Supabase Auth로 교체하면 됨
-    """
-    fake_token = "dev-token-" + req.email
-
-    return {
-        "access_token": fake_token,
-        "token_type": "bearer",
-        "user_id": req.email,  # 임시로 email을 user_id처럼 사용
-    }
 
 
 # ==============================

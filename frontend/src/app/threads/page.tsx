@@ -1,30 +1,25 @@
-/*
-로그인한 사용자의 전체 스레드 목록 조회
-ThreadCard로 렌더링
-클릭하면 /threads/[id]
-*/
-
 "use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { api } from "@/lib/api";
 import { auth } from "@/lib/auth";
 
 type Thread = {
   id: string;
   title?: string | null;
-  created_at?: string;
+  created_at?: string | null;
 };
-
-const THREADS_ENDPOINT = "http://localhost:8000/threads/dev-open";
 
 export default function ThreadsPage() {
   const router = useRouter();
+
   const [threads, setThreads] = useState<Thread[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // 1) 토큰 없으면 로그인으로 보내기
     const token = auth.getToken();
     if (!token) {
       router.push("/login");
@@ -33,25 +28,21 @@ export default function ThreadsPage() {
 
     async function load() {
       try {
+        setLoading(true);
         setError(null);
 
-        // ✅ api() 대신 fetch 직접 사용 (Authorization 안 달기)
-        const res = await fetch(THREADS_ENDPOINT, {
+        // 2) /threads 호출 (백엔드 라우터에 맞춤)
+        const data = await api("/threads?limit=20&offset=0&order=desc", {
           method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
         });
 
-        if (!res.ok) {
-          const text = await res.text();
-          throw new Error(`status ${res.status}: ${text}`);
-        }
+        console.log("GET /threads response:", data);
 
-        const data = await res.json();
-        console.log("threads api response:", data);
+        // 백엔드가 {"threads": [...]} 형식으로 주도록 되어 있어서 이렇게 파싱
+        const list: Thread[] = Array.isArray(data)
+          ? data
+          : data?.threads ?? [];
 
-        const list = Array.isArray(data) ? data : data.threads ?? [];
         setThreads(list);
       } catch (err: any) {
         console.error("threads load error:", err);
@@ -64,29 +55,38 @@ export default function ThreadsPage() {
     load();
   }, [router]);
 
+  // 3) 로딩 중 화면
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-sm text-zinc-600">
-        스레드 불러오는 중...
+      <div className="min-h-screen flex items-center justify-center bg-zinc-50">
+        <p className="text-sm text-zinc-600">스레드를 불러오는 중입니다...</p>
       </div>
     );
   }
 
+  // 4) 에러 화면
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 max-w-md">
+      <div className="min-h-screen flex items-center justify-center bg-zinc-50">
+        <div className="max-w-md rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           <div className="font-semibold mb-1">
             스레드를 불러오지 못했습니다.
           </div>
           <div className="text-xs text-red-500 break-all">
             {error}
           </div>
+          <button
+            className="mt-3 rounded-md border border-red-300 px-3 py-1 text-xs"
+            onClick={() => window.location.reload()}
+          >
+            다시 시도
+          </button>
         </div>
       </div>
     );
   }
 
+  // 5) 정상 리스트 화면
   return (
     <div className="min-h-screen bg-zinc-50 p-8">
       <div className="mx-auto max-w-3xl">

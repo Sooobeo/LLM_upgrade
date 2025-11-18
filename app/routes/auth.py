@@ -42,3 +42,66 @@ def logout_route(response: Response, authorization: Optional[str] = Header(None)
     revoke_if_possible(access_token)
     clear_refresh_cookie(response)
     return {"ok": True}
+
+from pydantic import BaseModel
+import httpx
+from app.core.config import settings
+
+# 이메일/비밀번호 로그인용 요청 스키마
+class PasswordLoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+@router.post("/login/password")
+async def login_with_password(payload: PasswordLoginRequest):
+    """
+    이메일 + 비밀번호로 Supabase Auth에 로그인하는 엔드포인트.
+
+    1) 프론트에서 /auth/login/password 에 {email, password} JSON으로 POST
+    2) 여기서 Supabase /auth/v1/token?grant_type=password 로 proxy 호출
+    3) Supabase가 돌려주는 access_token + user 정보를 그대로 프론트에 반환
+    """
+
+    SUPABASE_URL = (settings.SUPABASE_URL or "").rstrip("/")
+    SUPABASE_ANON_KEY = settings.SUPABASE_ANON_KEY
+
+    if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+        raise HTTPException(
+            status_code=500,
+            detail="Supabase 설정(SUPABASE_URL / SUPABASE_ANON_KEY)이 비어 있습니다.",
+        )
+
+    url = f"{SUPABASE_URL}/auth/v1/token?grant_type=password"
+
+    headers = {
+        "Content-Type": "application/json",
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": f"Bearer {SUPABASE_ANON_KEY}",
+    }
+
+    json_body = {
+        "email": payload.email,
+        "password": payload.password,
+    }
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.post(url, headers=headers, json=json_body)
+
+    try:
+        data = resp.json()
+    except Exception:
+        data = {"raw": resp.text}
+
+    if resp.status_code >= 400:
+        # Supabase가 주는 에러 그대로 전달
+        raise HTTPException(status_code=resp.status_code, detail=data)
+
+    # 예: Supabase 응답 예시
+    # {
+    #   "access_token": "...",
+    #   "token_type": "bearer",
+    #   "expires_in": 3600,
+    #   "user": { "id": "...", ... }
+    # }
+    return data

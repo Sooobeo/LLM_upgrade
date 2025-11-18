@@ -1,10 +1,3 @@
-/*
-아이디, 비밀번호 입력
-로그인 버튼 -> FastAPI /auth/login 요청
-성공 여부랑 상관없이 (개발 단계에서는)
-토큰/유저 정보를 저장하고 /threads로 이동
-*/
-
 "use client";
 
 import { FormEvent, useState } from "react";
@@ -12,12 +5,12 @@ import { useRouter } from "next/navigation";
 import { auth } from "@/lib/auth";
 
 export default function LoginPage() {
+  const router = useRouter();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const router = useRouter();
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -25,40 +18,67 @@ export default function LoginPage() {
     setError(null);
 
     try {
+      // 디버그용: 실제로 무엇을 보내는지 확인
+      console.log("login with:", {
+        email: email,
+        password: password,
+      });
+
+      const res = await fetch("http://localhost:8000/auth/login/password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: email.trim(),    // 공백 방지
+          password: password,
+        }),
+      });
+
+      const text = await res.text();
       let data: any = null;
-
       try {
-        const res = await fetch("http://localhost:8000/auth/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
-        });
-
-        // 응답이 JSON이면 읽고, 아니면 그냥 무시
-        try {
-          data = await res.json();
-        } catch {
-          data = null;
-        }
-
-        console.log("login response:", res.status, data);
-      } catch (networkError) {
-        console.warn("네트워크 에러 (그래도 개발용으로 계속 진행):", networkError);
+        data = text ? JSON.parse(text) : null;
+      } catch {
+        data = null;
       }
 
-      // 백엔드 응답에 access_token / user_id가 있으면 쓰고,
-      // 없으면 임시(dev) 값으로 채워서 진행
-      const token = data?.access_token ?? `dev-token-${email}`;
-      const userId = data?.user_id ?? email;
+      if (!res.ok) {
+        const detailMsg =
+          data?.detail?.msg ||
+          data?.detail?.error ||
+          data?.detail?.error_description ||
+          data?.detail ||
+          text ||
+          `status ${res.status}`;
 
-      auth.setToken(token);
+        throw new Error(detailMsg);
+      }
+
+      // Supabase password 로그인 응답 패턴들 커버
+      const accessToken =
+        data?.access_token ??
+        data?.accessToken ??
+        data?.session?.access_token;
+
+      const userId =
+        data?.user?.id ??
+        data?.user_id ??
+        email.trim();
+
+      if (!accessToken) {
+        throw new Error("access_token이 응답에 없습니다.");
+      }
+
+      auth.setToken(accessToken);
       auth.setUserId(userId);
 
-      // 로그인 성공했다고 치고 /threads로 이동
+      console.log("login success, token:", accessToken.slice(0, 12), "...");
+
       router.push("/threads");
-    } catch (err) {
-      console.error(err);
-      setError("로그인 처리 중 오류가 발생했습니다.");
+    } catch (err: any) {
+      console.error("login error:", err);
+      setError(err.message ?? "로그인 중 오류가 발생했습니다.");
     } finally {
       setLoading(false);
     }
@@ -99,7 +119,7 @@ export default function LoginPage() {
           </div>
 
           {error && (
-            <p className="text-sm text-red-500">
+            <p className="text-sm text-red-500 whitespace-pre-wrap">
               {error}
             </p>
           )}
