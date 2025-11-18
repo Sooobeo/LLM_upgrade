@@ -40,6 +40,14 @@ def insert_thread_and_messages(sb, payload: Dict[str, Any]) -> str:
 
     return thread_id
 
+def create_thread_and_messages(*args, **kwargs):
+    """
+    Backward-compatible alias.
+    예전 코드에서 쓰던 create_thread_and_messages 이름을
+    지금 insert_thread_and_messages로 넘겨준다.
+    """
+    return insert_thread_and_messages(*args, **kwargs)
+
 
 def fetch_thread(sb, thread_id: str) -> Dict[str, Any]:
     # thread 1건
@@ -71,6 +79,14 @@ def fetch_thread(sb, thread_id: str) -> Dict[str, Any]:
         "messages": rm.data or [],
     }
     return out
+
+def get_thread(*args, **kwargs):
+    """
+    Backward-compatible alias.
+    예전 코드에서 쓰던 get_thread 이름을
+    지금 fetch_thread 함수로 연결한다.
+    """
+    return fetch_thread(*args, **kwargs)
 
 
 def list_threads(sb, owner_id: str, limit: int = 10, offset: int = 0) -> List[Dict[str, Any]]:

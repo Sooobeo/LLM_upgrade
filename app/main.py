@@ -4,14 +4,12 @@ import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from pydantic import BaseModel
 
 from app.core.config import settings
 from app.routes import health, auth, thread
-from app.db.supabase import get_supabase
-from app.repository import (
-    # 필요한 것만 import – 지금은 search_messages_by_owner만 사용
-    search_messages_by_owner,
-)
+from app.db.supabase import get_supabase  # 지금은 안 쓰여도 일단 둠
+
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -32,6 +30,32 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(thread.router)
 app.include_router(auth.router)
+
+
+# ==============================
+# 0) 임시 로그인 엔드포인트 (FE 연동용)
+#    POST /auth/login
+# ==============================
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+@app.post("/auth/login")
+def login(req: LoginRequest):
+    """
+    임시 로그인 엔드포인트 (개발용)
+
+    - 어떤 이메일/비밀번호가 와도 일단 "성공" 응답을 줌
+    - 나중에 Supabase Auth로 교체하면 됨
+    """
+    fake_token = "dev-token-" + req.email
+
+    return {
+        "access_token": fake_token,
+        "token_type": "bearer",
+        "user_id": req.email,  # 임시로 email을 user_id처럼 사용
+    }
 
 
 # ==============================
@@ -62,7 +86,6 @@ async def exchange_id_token(payload: dict):
             },
         )
 
-    # 팀 구조에서 이미 settings를 통해 SUPABASE 설정을 관리하므로 여기서 사용
     SUPABASE_URL = (settings.SUPABASE_URL or "").rstrip("/")
     SUPABASE_ANON_KEY = settings.SUPABASE_ANON_KEY
 
@@ -88,14 +111,13 @@ async def exchange_id_token(payload: dict):
         data = {"raw": r.text}
 
     if r.status_code >= 400:
-        # Supabase 측에서 에러 응답을 주면 그대로 전달
         raise HTTPException(status_code=r.status_code, detail=data)
 
     return data
 
 
 # ==============================
-# 2) owner_id 기준 메시지 검색
+# 2) owner_id 기준 메시지 검색 (임시 비활성)
 #    GET /messages
 # ==============================
 @app.get("/messages")
@@ -106,26 +128,20 @@ def get_messages(
     offset: int = 0,
 ):
     """
-    특정 owner_id의 모든 threads에 속한 messages 조회 + (선택) content 부분 검색.
-    - owner_id: 필수. 이 유저의 threads에 속한 messages만 가져온다.
-    - q: 선택. content에 q가 포함된 메시지만 필터 (부분 검색).
-    - limit, offset: 페이징.
+    [미구현] 특정 owner_id의 모든 threads에 속한 messages 조회 + (선택) content 부분 검색.
+
+    지금은 BE 레포지토리에 search_messages_by_owner 함수가 없어서
+    임시로 501 에러를 반환하도록 두었어.
+
+    나중에 구현되면:
+    - app.repository 쪽에 search_messages_by_owner(supabase, owner_id, q, limit, offset)
+      함수 만든 다음
+    - 여기서 그 함수를 호출하도록 수정하면 돼.
     """
-    try:
-        data = search_messages_by_owner(
-            get_supabase(),  # app.db.supabase.get_supabase()
-            owner_id=owner_id,
-            q=q,
-            limit=limit,
-            offset=offset,
-        )
-        return data
-    except Exception as e:
-        # 내부 에러는 500으로 래핑
-        raise HTTPException(
-            status_code=500,
-            detail=f"search_messages_by_owner failed: {e}",
-        )
+    raise HTTPException(
+        status_code=501,
+        detail="search_messages_by_owner 미구현(/messages 임시 비활성 상태)",
+    )
 
 
 # ==============================
@@ -150,7 +166,7 @@ def env_check():
 
 
 # ==============================
-# 4) OpenAPI 서버 URL 커스터마이즈 (팀 코드 유지)
+# 4) OpenAPI 서버 URL 커스터마이즈
 # ==============================
 def custom_openapi():
     if app.openapi_schema:
