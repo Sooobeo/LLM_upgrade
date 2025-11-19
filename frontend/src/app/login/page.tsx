@@ -2,7 +2,14 @@
 "use client";
 
 import { useState } from "react";
-import { auth } from "@/lib/auth";
+
+// ⭐ 여기서 API_BASE_URL 꼭 선언해줘야 함
+// .env.local에 NEXT_PUBLIC_API_BASE_URL이 있으면 그거 쓰고,
+// 없으면 기본값으로 127.0.0.1:8000 사용
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000";
+
+console.log("API_BASE_URL =", API_BASE_URL);
 
 export default function LoginPage() {
   const [email, setEmail] = useState("soob@gmail.com");
@@ -16,8 +23,7 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      // ✅ 이제는 Next API 프록시 사용 (브라우저 → /api/..., CORS 걱정 X)
-      const res = await fetch("/api/auth/login/password", {
+      const res = await fetch(`${API_BASE_URL}/auth/login/password`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -25,10 +31,38 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await res.json();
+      // 🔴 절대 바로 res.json() 하지 말고, 우선 text/헤더부터 확인
+      const contentType = res.headers.get("content-type") || "";
+      const text = await res.text();
+
+      console.log(
+        "[login] raw response:",
+        res.status,
+        contentType,
+        text.slice(0, 200) // 너무 길면 앞부분만
+      );
+
+      let data: any = null;
+
+      if (contentType.includes("application/json")) {
+        try {
+          data = text ? JSON.parse(text) : null;
+        } catch (e) {
+          console.error("[login] JSON parse error:", e);
+          setError("서버 JSON 파싱 중 오류가 발생했습니다.");
+          return;
+        }
+      } else {
+        // 여기로 오면 서버가 HTML 같은 걸 보낸 거라서,
+        // SyntaxError 대신 메시지만 띄우고 끝낼 거야.
+        setError(
+          `서버가 JSON이 아닌 응답을 보냈습니다. (status ${res.status})`
+        );
+        return;
+      }
 
       if (!res.ok) {
-        console.error("Login failed:", data);
+        console.error("[login] Login failed:", data);
         setError(data?.detail?.message || data?.detail || "로그인 실패");
         return;
       }
@@ -39,13 +73,13 @@ export default function LoginPage() {
         return;
       }
 
-      // ✅ 통일된 auth 유틸 사용
-      auth.setToken(accessToken);
+      // 일단 간단하게 localStorage에만 저장
+      window.localStorage.setItem("access_token", accessToken);
 
-      // ✅ /threads로 이동
+      // 스레드 페이지로 이동
       window.location.href = "/threads";
     } catch (err: any) {
-      console.error(err);
+      console.error("[login] 네트워크/기타 오류:", err);
       setError("네트워크 오류");
     } finally {
       setLoading(false);
@@ -77,7 +111,7 @@ export default function LoginPage() {
           />
         </div>
 
-        {error && <p className="text-sm text-red-500">{error}</p>}
+        {error && <p className="text-sm text-red-500 whitespace-pre-wrap">{error}</p>}
 
         <button
           type="submit"
