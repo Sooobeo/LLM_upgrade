@@ -1,8 +1,9 @@
+// src/app/threads/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 import { auth } from "@/lib/auth";
 
 type Thread = {
@@ -19,9 +20,9 @@ export default function ThreadsPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // 1) 토큰 없으면 로그인으로 보내기
     const token = auth.getToken();
     if (!token) {
+      console.log("[ThreadsPage] no token, redirect /login");
       router.push("/login");
       return;
     }
@@ -31,14 +32,8 @@ export default function ThreadsPage() {
         setLoading(true);
         setError(null);
 
-        // 2) /threads 호출 (백엔드 라우터에 맞춤)
-        const data = await api("/threads?limit=20&offset=0&order=desc", {
-          method: "GET",
-        });
+        const data = await apiFetch("/threads", { method: "GET" });
 
-        console.log("GET /threads response:", data);
-
-        // 백엔드가 {"threads": [...]} 형식으로 주도록 되어 있어서 이렇게 파싱
         const list: Thread[] = Array.isArray(data)
           ? data
           : data?.threads ?? [];
@@ -55,7 +50,6 @@ export default function ThreadsPage() {
     load();
   }, [router]);
 
-  // 3) 로딩 중 화면
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-zinc-50">
@@ -64,7 +58,6 @@ export default function ThreadsPage() {
     );
   }
 
-  // 4) 에러 화면
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-zinc-50">
@@ -86,7 +79,6 @@ export default function ThreadsPage() {
     );
   }
 
-  // 5) 정상 리스트 화면
   return (
     <div className="min-h-screen bg-zinc-50 p-8">
       <div className="mx-auto max-w-3xl">

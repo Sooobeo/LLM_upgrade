@@ -16,11 +16,17 @@ app = FastAPI(
     version=settings.PROJECT_VERSION,
     description=settings.DESCRIPTION,
 )
+origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
+]
 
 # CORS (필요 시 조정)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # 운영 시에는 특정 도메인으로 제한하는 것이 좋음
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
