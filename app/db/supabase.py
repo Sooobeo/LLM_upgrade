@@ -1,3 +1,6 @@
+from __future__ import annotations
+import httpx
+from app.core.config import settings
 import requests
 from typing import Dict, Any, Optional, List
 from app.core.config import settings
@@ -218,3 +221,43 @@ def get_supabase() -> Client:
     기존 코드 호환용. 기본 anon 클라이언트 사용.
     """
     return get_supabase_anon()
+
+# app/db/supabase.py
+
+
+
+
+class SupabaseAuthError(Exception):
+    """Supabase 토큰 검증 실패용 커스텀 예외"""
+    pass
+
+
+async def get_user_from_access_token(access_token: str) -> Dict[str, Any]:
+    """
+    Supabase access_token(JWT)을 넣으면 해당 유저 정보를 반환.
+    토큰이 유효하지 않으면 SupabaseAuthError를 raise.
+    """
+    SUPABASE_URL = (settings.SUPABASE_URL or "").rstrip("/")
+    if not SUPABASE_URL:
+        raise SupabaseAuthError("SUPABASE_URL이 설정되어 있지 않습니다.")
+
+    # 가능하면 SERVICE_ROLE, 없으면 일단 ANON 키라도 사용
+    api_key: Optional[str] = getattr(settings, "SUPABASE_SERVICE_ROLE_KEY", None) or settings.SUPABASE_ANON_KEY
+    if not api_key:
+        raise SupabaseAuthError("Supabase API 키가 설정되어 있지 않습니다.")
+
+    url = f"{SUPABASE_URL}/auth/v1/user"
+    headers = {
+        "apikey": api_key,
+        "Authorization": f"Bearer {access_token}",
+    }
+
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.get(url, headers=headers)
+
+    if resp.status_code != 200:
+        # 401/403/404 등은 모두 '토큰이 유효하지 않다'로 처리
+        raise SupabaseAuthError(f"Supabase /auth/v1/user 호출 실패: {resp.status_code} {resp.text}")
+
+    data = resp.json()
+    return data  # Supabase User 객체(JSON)
