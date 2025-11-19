@@ -1,7 +1,7 @@
 
 from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query
-from typing import Dict, Any
+from typing import Dict, Any, List
 from fastapi import Path, Body
 from app.db.deps import get_current_user, get_access_token
 from app.schemas.thread import (
@@ -11,31 +11,8 @@ from app.schemas.thread import (
 from app.repository.thread import (
     create_thread_with_messages, list_threads_for_owner, get_thread_detail,delete_thread_by_id, list_thread_messages, add_messages_to_thread
 )
-
+from app.services.llm import call_llm_chat
 router = APIRouter(prefix="/threads", tags=["threads"])
-
-# POST /threads
-@router.post("", response_model=ThreadCreateResp, status_code=200)
-def create_thread(
-    body: ThreadCreate,
-    user: Dict[str, Any] = Depends(get_current_user),
-    access_token: str = Depends(get_access_token),
-):
-    try:
-        owner_id = user.get("id")
-        if not owner_id:
-            raise HTTPException(status_code=401, detail="Not authenticated")
-
-        payload = {
-            "title": body.title,
-            "messages": [{"role": m.role, "content": m.content} for m in body.messages],
-        }
-        thread_id = create_thread_with_messages(owner_id, payload, access_token)
-        return {"thread_id": thread_id, "status": "saved"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {e}")
 
 # GET /threads
 @router.get("", response_model=ThreadsListResp)
@@ -166,17 +143,39 @@ def add_messages(
     body: AddMessagesBody = Body(...),
     user: Dict[str, Any] = Depends(get_current_user),
     access_token: str = Depends(get_access_token),
+
+    # 👇 새로 추가: LLM 옵션
+    with_llm: bool = Query(
+        False,
+        description="True면 LLM(GPT/Gemini) 답변을 자동으로 이어서 추가",
+    ),
+    provider: str = Query(
+        "gpt",
+        pattern="^(gpt|gemini)$",
+        description="사용할 LLM 제공자: gpt 또는 gemini",
+    ),
+    model_name: str | None = Query(
+        None,
+        description="선택: 사용할 모델 이름(없으면 settings의 기본값)",
+    ),
 ):
     try:
         owner_id = user.get("id")
         if not owner_id:
-            raise HTTPException(status_code=401, detail={"code": "UNAUTHORIZED", "message": "Missing or invalid access token"})
+            raise HTTPException(
+                status_code=401,
+                detail={"code": "UNAUTHORIZED", "message": "Missing or invalid access token"},
+            )
 
-        # 내용 공백 방지(422): pydantic에 걸리지만 방어적으로 한 번 더
+        # 내용 공백 방지(422): pydantic에서도 걸리지만 한 번 더 확인
         for m in body.messages:
             if not m.content.strip():
-                raise HTTPException(status_code=422, detail={"code": "VALIDATION_ERROR", "message": "Message content cannot be empty"})
+                raise HTTPException(
+                    status_code=422,
+                    detail={"code": "VALIDATION_ERROR", "message": "Message content cannot be empty"},
+                )
 
+        # 1) 먼저 유저 메시지들을 DB에 저장
         owned, added = add_messages_to_thread(
             owner_id=owner_id,
             thread_id=thread_id,
@@ -185,15 +184,77 @@ def add_messages(
         )
 
         if not owned:
-            # 남의 스레드 or 미존재 → RLS 하에선 동일하게 404
-            raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Thread not found"})
+            # 남의 스레드 or 미존재 → 404
+            raise HTTPException(
+                status_code=404,
+                detail={"code": "NOT_FOUND", "message": "Thread not found"},
+            )
 
-        return {"thread_id": thread_id, "added_count": added, "status": "saved"}
+        total_added = added
+
+        # 2) 옵션: LLM 호출로 assistant 답변 자동 이어 붙이기
+        if with_llm:
+            # 스레드 전체 메시지를 가져와서 LLM 컨텍스트로 사용
+            detail = get_thread_detail(owner_id, thread_id, access_token)
+            if not detail:
+                raise HTTPException(
+                    status_code=404,
+                    detail={"code": "NOT_FOUND", "message": "Thread not found"},
+                )
+
+            history_msgs = detail.get("messages", []) or []
+
+            # LLM용 messages 배열 구성
+            llm_messages: List[Dict[str, str]] = []
+
+            # system 프롬프트 예시 (원하는 내용으로 수정 가능)
+            llm_messages.append({
+                "role": "system",
+                "content": "너는 CareOn 서비스의 상담 챗봇이야. "
+                           "사용자의 질문에 친절하게 한국어로 답변해줘.",
+            })
+
+            # 기존 대화 히스토리 추가
+            for m in history_msgs:
+                role = m.get("role") or "assistant"
+                content = m.get("content") or ""
+                llm_messages.append({"role": role, "content": content})
+
+            # LLM 호출
+            try:
+                reply_text = call_llm_chat(
+                    provider="gemini" if provider == "gemini" else "gpt",
+                    messages=llm_messages,
+                    model_name=model_name,
+                )
+            except Exception as e:
+                # LLM 실패해도 전체 API가 죽지 않게 하고 싶으면 여기서 그냥 로그만 찍고 넘어가도 됨
+                raise HTTPException(
+                    status_code=500,
+                    detail={"code": "LLM_ERROR", "message": f"LLM call failed: {e}"},
+                )
+
+            if reply_text.strip():
+                # 3) LLM reply도 assistant 메시지로 같은 thread에 저장
+                _, added_ai = add_messages_to_thread(
+                    owner_id=owner_id,
+                    thread_id=thread_id,
+                    messages=[{"role": "assistant", "content": reply_text}],
+                    access_token=access_token,
+                )
+                total_added += added_ai
+
+        return {"thread_id": thread_id, "added_count": total_added, "status": "saved"}
 
     except HTTPException:
         raise
     except ValueError as ve:
-        # repository에서 content 공백 등으로 올린 검증 오류
-        raise HTTPException(status_code=422, detail={"code": "VALIDATION_ERROR", "message": str(ve)})
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "VALIDATION_ERROR", "message": str(ve)},
+        )
     except Exception:
-        raise HTTPException(status_code=500, detail={"code": "DB_INSERT_FAILED", "message": "Failed to insert messages into Supabase"})
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "DB_INSERT_FAILED", "message": "Failed to insert messages into Supabase"},
+        )

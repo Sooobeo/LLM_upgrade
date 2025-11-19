@@ -1,4 +1,5 @@
-from typing import Optional
+# app/main.py
+from typing import Dict, Any
 
 import httpx
 from fastapi import FastAPI, HTTPException
@@ -6,12 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 
 from app.core.config import settings
-from app.routes import health, auth, thread
-from app.db.supabase import get_supabase
-from app.repository import (
-    # 필요한 것만 import – 지금은 search_messages_by_owner만 사용
-    search_messages_by_owner,
-)
+from app.routes import health, auth, thread, message, ingest
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -21,17 +17,20 @@ app = FastAPI(
 
 # CORS (필요 시 조정)
 app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    CORSMiddleware(
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 )
 
 # 라우터 연결
 app.include_router(health.router)
 app.include_router(thread.router)
+app.include_router(message.router) 
 app.include_router(auth.router)
+app.include_router(ingest.router)
 
 
 # ==============================
@@ -42,14 +41,6 @@ app.include_router(auth.router)
 async def exchange_id_token(payload: dict):
     """
     Google ID Token을 Supabase Auth로 교환하는 엔드포인트.
-
-    기대 바디 예시:
-    {
-      "provider": "google",
-      "id_token": "...",
-      "client_id": "...",
-      "nonce": "..." (옵션)
-    }
     """
     required = ["provider", "id_token", "client_id"]
     if any(k not in payload for k in required):
@@ -62,7 +53,6 @@ async def exchange_id_token(payload: dict):
             },
         )
 
-    # 팀 구조에서 이미 settings를 통해 SUPABASE 설정을 관리하므로 여기서 사용
     SUPABASE_URL = (settings.SUPABASE_URL or "").rstrip("/")
     SUPABASE_ANON_KEY = settings.SUPABASE_ANON_KEY
 
@@ -88,56 +78,17 @@ async def exchange_id_token(payload: dict):
         data = {"raw": r.text}
 
     if r.status_code >= 400:
-        # Supabase 측에서 에러 응답을 주면 그대로 전달
         raise HTTPException(status_code=r.status_code, detail=data)
 
     return data
 
 
 # ==============================
-# 2) owner_id 기준 메시지 검색
-#    GET /messages
-# ==============================
-@app.get("/messages")
-def get_messages(
-    owner_id: str,
-    q: Optional[str] = None,
-    limit: int = 50,
-    offset: int = 0,
-):
-    """
-    특정 owner_id의 모든 threads에 속한 messages 조회 + (선택) content 부분 검색.
-    - owner_id: 필수. 이 유저의 threads에 속한 messages만 가져온다.
-    - q: 선택. content에 q가 포함된 메시지만 필터 (부분 검색).
-    - limit, offset: 페이징.
-    """
-    try:
-        data = search_messages_by_owner(
-            get_supabase(),  # app.db.supabase.get_supabase()
-            owner_id=owner_id,
-            q=q,
-            limit=limit,
-            offset=offset,
-        )
-        return data
-    except Exception as e:
-        # 내부 에러는 500으로 래핑
-        raise HTTPException(
-            status_code=500,
-            detail=f"search_messages_by_owner failed: {e}",
-        )
-
-
-# ==============================
-# 3) 환경 확인용 디버그 엔드포인트
+# 2) 환경 확인용 디버그 엔드포인트
 #    GET /_env_check
 # ==============================
 @app.get("/_env_check")
 def env_check():
-    """
-    Supabase 관련 설정이 제대로 들어가 있는지 확인용 디버그 엔드포인트.
-    실제 운영에서는 제거하거나 보호 필요.
-    """
     url = settings.SUPABASE_URL
     anon = settings.SUPABASE_ANON_KEY
     service_role = getattr(settings, "SUPABASE_SERVICE_ROLE_KEY", None)
@@ -150,7 +101,7 @@ def env_check():
 
 
 # ==============================
-# 4) OpenAPI 서버 URL 커스터마이즈 (팀 코드 유지)
+# 3) OpenAPI 서버 URL 커스터마이즈
 # ==============================
 def custom_openapi():
     if app.openapi_schema:
