@@ -11,7 +11,12 @@ from app.repository.auth import (
     refresh_with_cookie, revoke_if_possible
 )
 
+from pydantic import BaseModel
+import httpx
+from app.core.config import settings
+
 router = APIRouter(prefix="/auth", tags=["auth"])
+
 
 @router.post("/google/exchange-id-token", response_model=GoogleExchangeResp, status_code=200)
 def google_exchange_id_token_route(body: GoogleExchangeBody, response: Response):
@@ -246,3 +251,88 @@ async def signup_with_password(payload: PasswordSignupRequest):
         "profile_saved": True,
         "profile": ins.data[0] if ins.data else None,
     }
+
+# app/routes/auth.py
+
+
+
+
+class PasswordSignupRequest(BaseModel):
+    email: str
+    password: str
+    nickname: str | None = None
+
+class PasswordLoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+@router.post("/signup/password")
+async def signup_with_password(payload: PasswordSignupRequest):
+    """
+    Supabase password sign-up 프록시
+    """
+    SUPABASE_URL = (settings.SUPABASE_URL or "").rstrip("/")
+    SUPABASE_ANON_KEY = settings.SUPABASE_ANON_KEY
+    if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+        raise HTTPException(500, "Missing SUPABASE_URL / SUPABASE_ANON_KEY")
+
+    url = f"{SUPABASE_URL}/auth/v1/signup"
+    headers = {
+        "Content-Type": "application/json",
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": f"Bearer {SUPABASE_ANON_KEY}",
+    }
+
+    body = {
+        "email": payload.email,
+        "password": payload.password,
+        # user_metadata에 nickname 넣기 (Supabase auth.users.user_metadata로 저장됨)
+        "data": {"nickname": payload.nickname} if payload.nickname else {},
+    }
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.post(url, headers=headers, json=body)
+
+    try:
+        data = resp.json()
+    except Exception:
+        data = {"raw": resp.text}
+
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=resp.status_code, detail=data)
+
+    return data
+
+
+@router.post("/login/password")
+async def login_with_password(payload: PasswordLoginRequest):
+    """
+    Supabase password sign-in 프록시
+    """
+    SUPABASE_URL = (settings.SUPABASE_URL or "").rstrip("/")
+    SUPABASE_ANON_KEY = settings.SUPABASE_ANON_KEY
+    if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+        raise HTTPException(500, "Missing SUPABASE_URL / SUPABASE_ANON_KEY")
+
+    url = f"{SUPABASE_URL}/auth/v1/token?grant_type=password"
+    headers = {
+        "Content-Type": "application/json",
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": f"Bearer {SUPABASE_ANON_KEY}",
+    }
+
+    body = {"email": payload.email, "password": payload.password}
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.post(url, headers=headers, json=body)
+
+    try:
+        data = resp.json()
+    except Exception:
+        data = {"raw": resp.text}
+
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=resp.status_code, detail=data)
+
+    return data
