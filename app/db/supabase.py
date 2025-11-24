@@ -4,6 +4,14 @@ from app.core.config import settings
 import requests
 from typing import Dict, Any, Optional, List
 from app.core.config import settings
+# app/db/supabase.py
+from supabase import create_client
+from app.core.config import settings
+
+def get_supabase(service_role: bool = False):
+    key = settings.SUPABASE_SERVICE_ROLE_KEY if service_role else settings.SUPABASE_ANON_KEY
+    return create_client(settings.SUPABASE_URL, key)
+
 
 _BASE = settings.SUPABASE_URL.rstrip("/")
 _HEADERS_BASE = {

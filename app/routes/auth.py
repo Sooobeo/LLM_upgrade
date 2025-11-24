@@ -105,3 +105,144 @@ async def login_with_password(payload: PasswordLoginRequest):
     #   "user": { "id": "...", ... }
     # }
     return data
+
+# app/routes/auth.py
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+from app.db.supabase import get_supabase
+from app.core.config import settings
+
+router = APIRouter(prefix="/auth", tags=["auth"])
+
+class SignupPasswordBody(BaseModel):
+    nickname: str
+    email: str
+    password: str
+
+@router.post("/signup/password")
+def signup_password(body: SignupPasswordBody):
+    sb = get_supabase()
+
+    # 1) Supabase Auth signUp
+    try:
+        auth_res = sb.auth.sign_up({
+            "email": body.email,
+            "password": body.password
+        })
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    user = auth_res.user
+    if not user:
+        raise HTTPException(status_code=400, detail="Signup failed: no user returned")
+
+    user_id = user.id
+
+    # 2) profiles 테이블에 nickname 저장
+    try:
+        sb.table("profiles").insert({
+            "id": user_id,
+            "nickname": body.nickname
+        }).execute()
+    except Exception as e:
+        # profiles insert가 실패해도 auth 유저는 만들어졌으니
+        # 원인만 안내
+        raise HTTPException(status_code=500, detail=f"profile insert failed: {e}")
+
+    return {
+        "ok": True,
+        "user_id": user_id,
+        "email": body.email,
+        "nickname": body.nickname
+    }
+
+# app/routes/auth.py
+from fastapi import APIRouter, HTTPException
+from app.schemas.auth import SignupPasswordReq, SignupPasswordResp
+from app.repository.auth import signup_with_password
+
+router = APIRouter(prefix="/auth", tags=["auth"])
+
+@router.post("/signup/password", response_model=SignupPasswordResp)
+def signup_password(body: SignupPasswordReq):
+    try:
+        data = signup_with_password(body.email, body.password, body.nickname)
+        return data
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"signup failed: {e}")
+
+# app/routes/auth.py
+
+from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException
+import httpx
+from app.core.config import settings
+from app.db.supabase import get_supabase  # 이미 있으면 그대로
+
+router = APIRouter(prefix="/auth", tags=["auth"])
+
+class PasswordSignupRequest(BaseModel):
+    email: str
+    password: str
+    nickname: str  # FE에서 받을 닉네임
+
+@router.post("/signup/password")
+async def signup_with_password(payload: PasswordSignupRequest):
+    """
+    1) Supabase Auth 회원가입
+    2) profiles 테이블에 nickname 저장
+    """
+    SUPABASE_URL = (settings.SUPABASE_URL or "").rstrip("/")
+    SUPABASE_ANON_KEY = settings.SUPABASE_ANON_KEY
+    SERVICE_ROLE = getattr(settings, "SUPABASE_SERVICE_ROLE_KEY", None)
+
+    if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+        raise HTTPException(500, detail="Supabase URL/ANON_KEY missing")
+
+    # 1) Supabase Auth signup
+    url = f"{SUPABASE_URL}/auth/v1/signup"
+    headers = {
+        "Content-Type": "application/json",
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": f"Bearer {SUPABASE_ANON_KEY}",
+    }
+    body = {"email": payload.email, "password": payload.password}
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.post(url, headers=headers, json=body)
+
+    try:
+        data = resp.json()
+    except Exception:
+        data = {"raw": resp.text}
+
+    if resp.status_code >= 400:
+        # Supabase가 주는 에러 그대로 전달
+        raise HTTPException(status_code=resp.status_code, detail=data)
+
+    # data 안에 user.id가 들어있음 (인증 메일 켜져 있으면 session은 없을 수도)
+    user_id = data.get("user", {}).get("id")
+    if not user_id:
+        # 가입 OK인데 user가 안 들어오면 여기서 끝내도 됨
+        return data
+
+    # 2) profiles 저장
+    # RLS 켜져 있으면 서비스롤로 넣는 게 안전
+    if not SERVICE_ROLE:
+        # 서비스롤 없으면 그냥 Auth 결과만 반환
+        return data
+
+    supabase_admin = get_supabase(service_role=True)  # 아래 get_supabase 수정 필요(2번)
+    ins = (
+        supabase_admin.table("profiles")
+        .insert({"id": user_id, "email": payload.email, "nickname": payload.nickname})
+        .execute()
+    )
+
+    return {
+        **data,
+        "profile_saved": True,
+        "profile": ins.data[0] if ins.data else None,
+    }

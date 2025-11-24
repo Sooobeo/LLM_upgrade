@@ -82,3 +82,69 @@ def revoke_if_possible(access_token: Optional[str]) -> None:
         sb.logout(access_token)
     except Exception:
         pass
+
+# app/repository/auth.py
+import httpx
+from app.core.config import settings
+
+async def signup_with_email_password(email: str, password: str, nickname: str):
+    supabase_url = (settings.SUPABASE_URL or "").rstrip("/")
+    anon_key = settings.SUPABASE_ANON_KEY
+
+    url = f"{supabase_url}/auth/v1/signup"
+    headers = {
+        "apikey": anon_key,
+        "Authorization": f"Bearer {anon_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "email": email,
+        "password": password,
+        "data": { "nickname": nickname },
+    }
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.post(url, headers=headers, json=payload)
+
+    try:
+        return r.status_code, r.json()
+    except Exception:
+        return r.status_code, {"raw": r.text}
+
+# app/repository/auth.py
+from app.db.supabase import get_supabase
+
+def signup_with_password(email: str, password: str, nickname: str):
+    sb = get_supabase()
+
+    # 1) Supabase Auth signUp
+    auth_res = sb.auth.sign_up({"email": email, "password": password})
+    if auth_res.user is None:
+        # supabase-py가 에러를 던질 수도 있고, user=None으로 올 수도 있음
+        raise ValueError("Supabase sign_up failed")
+
+    user = auth_res.user
+    session = auth_res.session  # 이메일 인증 OFF면 session이 올 수도 있음
+
+    user_id = user.id
+
+    # 2) profiles insert
+    # sign_up 직후에는 auth.uid()가 없으니 anon key + service role이 필요할 수 있음.
+    # 지금은 backend에서 service role로 insert하는 방식으로 가자.
+    insert_res = (
+        sb.table("profiles")
+        .insert({"id": user_id, "email": email, "nickname": nickname})
+        .execute()
+    )
+
+    # 3) 응답 구성
+    access_token = session.access_token if session else None
+    token_type = session.token_type if session else None
+
+    return {
+        "access_token": access_token,
+        "token_type": token_type,
+        "user_id": user_id,
+        "email": email,
+        "nickname": nickname,
+    }
