@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 from typing import Optional
 
 import httpx
@@ -207,4 +206,4 @@ async def exchange_id_token(payload: dict):
         raise HTTPException(status_code=r.status_code, detail=data)
 
     return data
->>>>>>> 014db90 (mkr 1105 app/main.py upload)
+

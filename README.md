@@ -95,7 +95,3 @@ Postman에서 Authorization → Type: Bearer Token 설정
 발급받은 access_token 입력 후 요청
 
 /auth/refresh API는 HttpOnly 쿠키 자동 전송으로 작동합니다.
-```
-=======
-# LLM_upgrade
->>>>>>> d23033a (Initial commit)
