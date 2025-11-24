@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # FE 돌리기 전에 꼭 터미널에서
 # uvicorn app.main:app --reload 먼저 돌려주기
 
@@ -95,3 +96,6 @@ Postman에서 Authorization → Type: Bearer Token 설정
 
 /auth/refresh API는 HttpOnly 쿠키 자동 전송으로 작동합니다.
 ```
+=======
+# LLM_upgrade
+>>>>>>> 014db905644aa82de750fb26a1e5f02c9d2cde07
