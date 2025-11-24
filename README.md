@@ -1,5 +1,9 @@
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> 23524602a1a2c2e8095c9dec143c8cea8ad554b2
 # FE 돌리기 전에 꼭 터미널에서
 # uvicorn app.main:app --reload 먼저 돌려주기
 
@@ -96,6 +100,7 @@ Postman에서 Authorization → Type: Bearer Token 설정
 발급받은 access_token 입력 후 요청
 
 /auth/refresh API는 HttpOnly 쿠키 자동 전송으로 작동합니다.
+<<<<<<< HEAD
 ```
 =======
 # LLM_upgrade
@@ -103,3 +108,5 @@ Postman에서 Authorization → Type: Bearer Token 설정
 =======
 # LLM_upgrade
 >>>>>>> d23033a (Initial commit)
+=======
+>>>>>>> 23524602a1a2c2e8095c9dec143c8cea8ad554b2

@@ -207,6 +207,7 @@ async def exchange_id_token(payload: dict):
 
     return data
 
+<<<<<<< HEAD
 # app/main.py
 from fastapi import FastAPI, HTTPException
 import os, httpx
@@ -247,3 +248,5 @@ async def exchange_id_token(payload: dict):
         raise HTTPException(status_code=r.status_code, detail=data)
 
     return data
+=======
+>>>>>>> 23524602a1a2c2e8095c9dec143c8cea8ad554b2
