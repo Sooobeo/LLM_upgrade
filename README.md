@@ -1,3 +1,7 @@
+# FE 돌리기 전에 꼭 터미널에서
+# uvicorn app.main:app --reload 먼저 돌려주기
+
+
 # 🚀 LLM-Upgrade Backend
 
 > Supabase 기반 인증 및 데이터 관리를 사용하는 **LLM-Upgrade FastAPI 서버**입니다.
