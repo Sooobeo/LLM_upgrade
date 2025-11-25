@@ -1,14 +1,24 @@
 // src/app/threads/new/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
+import { auth } from "@/lib/auth";
 
 export default function NewThreadPage() {
+  const router = useRouter();
   const [title, setTitle] = useState("");
   const [content, setContent] = useState(""); // 첫 user 메시지
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const token = auth.getToken();
+    if (!token) {
+      router.push("/login");
+    }
+  }, [router]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -16,6 +26,13 @@ export default function NewThreadPage() {
     setError(null);
 
     try {
+      const token = auth.getToken();
+      if (!token) {
+        setError("로그인이 필요합니다.");
+        router.push("/login");
+        return;
+      }
+
       const body = {
         title: title || "제목 없는 스레드",
         messages: [

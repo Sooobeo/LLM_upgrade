@@ -1,6 +1,5 @@
 from __future__ import annotations
 from fastapi import Depends, Header, HTTPException
-from app.db.supabase import get_userinfo
 from typing import Any, Dict, Optional
 from app.db.supabase import get_user_from_access_token, SupabaseAuthError
 

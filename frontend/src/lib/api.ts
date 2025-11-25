@@ -19,14 +19,41 @@ function extractErrorMessage(payload: any, fallback: string) {
   if (!payload) return fallback;
   if (typeof payload === "string") return payload;
 
+  // FastAPI often sends {detail: "..."} or {detail: [{msg: "..."}]}
+  const fromDetail = (detail: any): string | undefined => {
+    if (!detail) return undefined;
+    if (typeof detail === "string") return detail;
+    if (Array.isArray(detail)) {
+      const msgs = detail
+        .map((d) => {
+          if (typeof d === "string") return d;
+          if (d?.msg) return d.msg;
+          if (d?.message) return d.message;
+          return undefined;
+        })
+        .filter(Boolean)
+        .join("; ");
+      return msgs || undefined;
+    }
+    if (typeof detail === "object") {
+      return detail.message || detail.error || detail.msg;
+    }
+    return undefined;
+  };
+
   if (typeof payload === "object") {
-    return (
-      payload.detail ||
-      payload.message ||
-      payload.error ||
-      payload.msg ||
-      fallback
-    );
+    const detailMsg = fromDetail(payload.detail);
+    if (detailMsg) return detailMsg;
+
+    const direct =
+      payload.message || payload.error || payload.msg || payload.title;
+    if (direct) return direct;
+
+    try {
+      return JSON.stringify(payload);
+    } catch {
+      return fallback;
+    }
   }
 
   return fallback;
@@ -51,7 +78,7 @@ export async function apiFetch(
 
   let response: Response;
   try {
-    response = await fetch(url, { ...options, headers });
+    response = await fetch(url, { ...options, headers, credentials: "include" });
   } catch (err: any) {
     throw new Error(
       err?.message || "네트워크 요청에 실패했습니다. 백엔드 서버를 확인해주세요.",

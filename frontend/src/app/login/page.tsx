@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { auth } from "@/lib/auth";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000";
@@ -45,7 +46,8 @@ export default function LoginPage() {
         return;
       }
 
-      
+      // Save tokens so future requests include Authorization automatically
+      auth.setSession({ accessToken, refreshToken: data.refresh_token });
       window.location.href = "/threads";
     } catch (err) {
       console.error("[login] error:", err);
