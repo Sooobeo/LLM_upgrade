@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiFetch } from "@/lib/api";
+import { api } from "@/lib/api";
 import { auth } from "@/lib/auth";
 
 type Thread = {
@@ -32,7 +32,7 @@ export default function ThreadsPage() {
         setLoading(true);
         setError(null);
 
-        const data = await apiFetch("/threads", { method: "GET" });
+        const data = await api("/threads", { method: "GET" });
 
         const list: Thread[] = Array.isArray(data)
           ? data

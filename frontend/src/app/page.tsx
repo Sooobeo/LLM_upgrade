@@ -1,72 +1,47 @@
-// src/app/threads/page.tsx
+// src/app/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
-import { apiFetch } from "@/lib/api";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { auth } from "@/lib/auth";
 
-type ThreadSummary = {
-  id: string;
-  title: string;
-  created_at: string;
-  message_count: number;
-  last_message_preview?: string | null;
-};
-
-export default function ThreadsPage() {
-  const [threads, setThreads] = useState<ThreadSummary[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+/**
+ * Public landing page.
+ * - Does NOT call protected APIs on mount (prevents 401 before login)
+ * - Redirects to /threads if already logged in
+ */
+export default function HomePage() {
+  const router = useRouter();
 
   useEffect(() => {
-    async function load() {
-      try {
-        const data = await apiFetch("/threads");
-        // 백엔드 response_model=ThreadsListResp { threads: [...] } 라고 가정
-        setThreads(data.threads ?? []);
-      } catch (err: any) {
-        console.error(err);
-        setError(err.message || "목록 불러오기 실패");
-      } finally {
-        setLoading(false);
-      }
+    const token = auth.getToken();
+    if (token) {
+      router.replace("/threads");
     }
-
-    load();
-  }, []);
-
-  if (loading) return <p className="p-4">불러오는 중...</p>;
-  if (error) return <p className="p-4 text-red-500">{error}</p>;
+  }, [router]);
 
   return (
-    <main className="max-w-2xl mx-auto p-4 space-y-4">
-      <h1 className="text-xl font-semibold mb-2">내 스레드</h1>
-
-      <a
-        href="/threads/new"
-        className="inline-block text-sm px-3 py-1 border rounded hover:bg-gray-50"
-      >
-        + 새 스레드 만들기
-      </a>
-
-      <ul className="space-y-2">
-        {threads.map((t) => (
-          <li key={t.id} className="border rounded px-3 py-2 hover:bg-gray-50">
-            <a href={`/threads/${t.id}`} className="block">
-              <div className="flex justify-between items-center">
-                <span className="font-medium text-sm">{t.title}</span>
-                <span className="text-xs text-gray-500">
-                  {t.message_count} messages
-                </span>
-              </div>
-              {t.last_message_preview && (
-                <p className="text-xs text-gray-600 mt-1 truncate">
-                  {t.last_message_preview}
-                </p>
-              )}
-            </a>
-          </li>
-        ))}
-      </ul>
+    <main className="min-h-screen flex flex-col items-center justify-center bg-zinc-50 px-4">
+      <div className="max-w-md w-full space-y-6 text-center">
+        <h1 className="text-2xl font-semibold">Welcome to LLM Upgrade</h1>
+        <p className="text-sm text-zinc-600">
+          로그인 후 대화 기록을 확인하세요. 아직 계정이 없다면 회원가입을 진행해주세요.
+        </p>
+        <div className="flex items-center justify-center gap-3">
+          <a
+            href="/login"
+            className="px-4 py-2 rounded bg-black text-white text-sm"
+          >
+            로그인
+          </a>
+          <a
+            href="/signup"
+            className="px-4 py-2 rounded border border-zinc-300 text-sm hover:bg-zinc-100"
+          >
+            회원가입
+          </a>
+        </div>
+      </div>
     </main>
   );
 }
