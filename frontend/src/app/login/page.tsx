@@ -6,9 +6,10 @@ import Link from "next/link";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000";
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");          // 기본값 제거
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +45,7 @@ export default function LoginPage() {
         return;
       }
 
-      window.localStorage.setItem("access_token", accessToken);
+      
       window.location.href = "/threads";
     } catch (err) {
       console.error("[login] error:", err);
@@ -52,6 +53,19 @@ export default function LoginPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleGoogleLogin() {
+    if (!SUPABASE_URL) {
+      setError("Supabase URL이 설정되어 있지 않습니다. (.env 확인)");
+      return;
+    }
+
+    const redirectTo = `${window.location.origin}/login/google-callback`;
+    const url = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(
+      redirectTo
+    )}`;
+    window.location.href = url;
   }
 
   return (
@@ -69,7 +83,7 @@ export default function LoginPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             type="email"
-            placeholder="계정 이메일을 입력하시오"   // ✅ placeholder 변경
+            placeholder="계정 이메일을 입력하시오" // ✅ placeholder 변경
             required
           />
         </div>
@@ -96,6 +110,14 @@ export default function LoginPage() {
           className="w-full py-2 rounded bg-black text-white text-sm disabled:opacity-60"
         >
           {loading ? "로그인 중..." : "로그인"}
+        </button>
+
+        <button
+          type="button"
+          onClick={handleGoogleLogin}
+          className="w-full py-2 rounded border border-zinc-300 text-sm hover:bg-zinc-50"
+        >
+          구글 로그인
         </button>
 
         {/* ✅ 회원가입 링크 */}
