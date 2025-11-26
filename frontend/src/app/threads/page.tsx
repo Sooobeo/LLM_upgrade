@@ -21,8 +21,8 @@ export default function ThreadsPage() {
   useEffect(() => {
     const token = auth.getToken();
     if (!token) {
-      console.log("[ThreadsPage] no token, redirect /login");
-      router.push("/login");
+      console.log("[ThreadsPage] no token, redirect /");
+      router.push("/");
       return;
     }
 
@@ -97,7 +97,7 @@ export default function ThreadsPage() {
               className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-xs text-blue-100 transition hover:bg-white/10"
               onClick={() => {
                 auth.clear();
-                router.push("/login");
+                router.push("/");
               }}
             >
               로그아웃
