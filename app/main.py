@@ -7,7 +7,7 @@ from fastapi.openapi.utils import get_openapi
 from pydantic import BaseModel
 
 from app.core.config import settings
-from app.routes import health, auth, thread
+from app.routes import health, auth, thread, user
 from app.db.supabase import get_supabase  # 지금은 안 쓰여도 일단 둠
 
 
@@ -26,7 +26,7 @@ origins = [
 # CORS (필요 시 조정)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 운영 시에는 특정 도메인으로 제한하는 것이 좋음
+    allow_origins=origins,  # 운영 시에는 특정 도메인으로 제한하는 것이 좋음
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -36,6 +36,7 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(thread.router)
 app.include_router(auth.router)
+app.include_router(user.router)
 
 
 
