@@ -39,8 +39,8 @@ class MeResp(BaseModel):
 
 class SignupPasswordReq(BaseModel):
     email: EmailStr
-    password: str
-    nickname: str
+    password: str = Field(..., min_length=6)
+    nickname: str = Field(..., min_length=1, max_length=50)
 
 
 class SignupPasswordResp(BaseModel):
