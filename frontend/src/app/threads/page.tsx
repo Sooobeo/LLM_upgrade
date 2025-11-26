@@ -1,4 +1,3 @@
-// src/app/threads/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -31,13 +30,8 @@ export default function ThreadsPage() {
       try {
         setLoading(true);
         setError(null);
-
         const data = await api("/threads", { method: "GET" });
-
-        const list: Thread[] = Array.isArray(data)
-          ? data
-          : data?.threads ?? [];
-
+        const list: Thread[] = Array.isArray(data) ? data : data?.threads ?? [];
         setThreads(list);
       } catch (err: any) {
         console.error("threads load error:", err);
@@ -52,24 +46,22 @@ export default function ThreadsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-zinc-50">
-        <p className="text-sm text-zinc-600">스레드를 불러오는 중입니다...</p>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-[#0c1424] via-[#0d1b33] to-[#0a1022] text-white">
+        <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-4 text-center shadow-lg backdrop-blur">
+          <p className="text-sm text-blue-100">스레드를 불러오는 중입니다...</p>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-zinc-50">
-        <div className="max-w-md rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          <div className="font-semibold mb-1">
-            스레드를 불러오지 못했습니다.
-          </div>
-          <div className="text-xs text-red-500 break-all">
-            {error}
-          </div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-[#0c1424] via-[#0d1b33] to-[#0a1022] text-white">
+        <div className="max-w-md rounded-2xl border border-white/15 bg-white/5 px-6 py-5 text-sm text-red-100 shadow-lg backdrop-blur">
+          <div className="font-semibold mb-1 text-red-200">스레드를 불러오지 못했어요.</div>
+          <div className="text-xs text-red-100 break-all">{error}</div>
           <button
-            className="mt-3 rounded-md border border-red-300 px-3 py-1 text-xs"
+            className="mt-4 rounded-lg border border-red-300/50 px-4 py-2 text-xs text-red-50 hover:bg-red-50/10"
             onClick={() => window.location.reload()}
           >
             다시 시도
@@ -80,44 +72,70 @@ export default function ThreadsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 p-8">
-      <div className="mx-auto max-w-3xl">
-        <header className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-semibold">나의 GPT 대화 스레드</h1>
-          <button
-            className="text-xs text-zinc-500 underline"
-            onClick={() => {
-              auth.clear();
-              router.push("/login");
-            }}
-          >
-            로그아웃
-          </button>
+    <div className="min-h-screen bg-gradient-to-b from-[#0c1424] via-[#0d1b33] to-[#0a1022] px-6 py-10 text-white">
+      <div className="mx-auto max-w-5xl">
+        <header className="mb-10 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-2">
+            <p className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-200">
+              LLM Threads
+            </p>
+            <div>
+              <h1 className="text-3xl font-bold md:text-4xl">나의 대화 스레드</h1>
+              <p className="mt-2 text-sm text-blue-100">
+                최근 대화를 모아보고, 이어서 작업하거나 새로운 스레드를 시작하세요.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              className="rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-white/15"
+              onClick={() => router.push("/threads/new")}
+            >
+              새 스레드
+            </button>
+            <button
+              className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-xs text-blue-100 transition hover:bg-white/10"
+              onClick={() => {
+                auth.clear();
+                router.push("/login");
+              }}
+            >
+              로그아웃
+            </button>
+          </div>
         </header>
 
         {threads.length === 0 ? (
-          <p className="text-sm text-zinc-600">
-            아직 저장된 스레드가 없어요.
-          </p>
+          <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-10 text-center text-sm text-blue-100 shadow-lg backdrop-blur">
+            <p className="font-semibold text-white">아직 저장된 스레드가 없습니다.</p>
+            <p className="mt-2 text-xs text-blue-200">새 스레드를 만들어 대화를 시작해 보세요.</p>
+            <button
+              className="mt-4 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold text-white hover:bg-white/15"
+              onClick={() => router.push("/threads/new")}
+            >
+              새 스레드 만들기
+            </button>
+          </div>
         ) : (
-          <ul className="space-y-3">
+          <div className="grid gap-4 md:grid-cols-2">
             {threads.map((t) => (
-              <li
+              <div
                 key={t.id}
-                className="cursor-pointer rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm hover:bg-zinc-50"
+                className="group cursor-pointer rounded-2xl border border-white/10 bg-white/5 p-5 shadow-md backdrop-blur transition hover:-translate-y-1 hover:bg-white/10"
                 onClick={() => router.push(`/threads/${t.id}`)}
               >
-                <div className="font-medium">
-                  {t.title || "(제목 없음)"}
+                <div className="flex items-start justify-between">
+                  <h3 className="text-lg font-semibold text-white">
+                    {t.title || "제목 없음"}
+                  </h3>
+                  <span className="text-[11px] text-blue-200 opacity-80 group-hover:opacity-100">
+                    {t.created_at ? new Date(t.created_at).toLocaleDateString() : ""}
+                  </span>
                 </div>
-                {t.created_at && (
-                  <div className="mt-1 text-xs text-zinc-500">
-                    {new Date(t.created_at).toLocaleString()}
-                  </div>
-                )}
-              </li>
+                <p className="mt-2 text-xs text-blue-100">이어 보기 ›</p>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </div>
     </div>

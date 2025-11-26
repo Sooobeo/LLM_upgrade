@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from typing import Any, Dict, Optional
+from urllib.parse import urlencode
 
 import httpx
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request, Response
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from app.core.config import settings
@@ -26,6 +28,25 @@ from app.schemas.auth import (
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+class GoogleRefreshBody(BaseModel):
+    refresh_token: str
+
+
+@router.get("/google/login", include_in_schema=False)
+def google_login_route(redirect_to: Optional[str] = None):
+    """
+    Redirect to the Supabase-hosted Google OAuth page.
+    Frontend hits /auth/google/login -> Supabase Google login page.
+    If redirect_to is provided, Supabase will send the user there after login
+    (must be allowed in Supabase project redirect settings).
+    """
+    base = settings.SUPABASE_URL.rstrip("/")
+    query = {"provider": "google"}
+    if redirect_to:
+        query["redirect_to"] = redirect_to
+    url = f"{base}/auth/v1/authorize?{urlencode(query)}"
+    return RedirectResponse(url=url, status_code=302)
 
 
 @router.post("/google/exchange-id-token", response_model=GoogleExchangeResp, status_code=200)
@@ -55,6 +76,17 @@ def refresh_route(request: Request, response: Response):
     return resp
 
 
+@router.post("/google/set-session", response_model=AccessOnlyResp)
+def google_set_session(body: GoogleRefreshBody, response: Response):
+    """
+    Set refresh cookie from Supabase-provided refresh_token (after hosted OAuth redirect).
+    Frontend should send refresh_token parsed from the Supabase redirect hash.
+    """
+    resp, new_refresh = refresh_with_cookie(body.refresh_token)
+    set_refresh_cookie(response, new_refresh or body.refresh_token, remember=False)
+    return resp
+
+
 @router.post("/logout")
 def logout_route(response: Response, authorization: Optional[str] = Header(None)):
     access_token = None
@@ -73,8 +105,7 @@ class PasswordLoginRequest(BaseModel):
 @router.post("/login/password")
 async def login_with_password(payload: PasswordLoginRequest):
     """
-    이메일 + 비밀번호로 Supabase Auth에 로그인하는 엔드포인트.
-    Supabase /auth/v1/token?grant_type=password를 프록시합니다.
+    Login with email/password using Supabase Auth password grant.
     """
 
     supabase_url = (settings.SUPABASE_URL or "").rstrip("/")
@@ -83,7 +114,7 @@ async def login_with_password(payload: PasswordLoginRequest):
     if not supabase_url or not anon_key:
         raise HTTPException(
             status_code=500,
-            detail="Supabase 설정(SUPABASE_URL / SUPABASE_ANON_KEY)이 비어 있습니다.",
+            detail="Supabase configuration (SUPABASE_URL / SUPABASE_ANON_KEY) is missing.",
         )
 
     url = f"{supabase_url}/auth/v1/token?grant_type=password"
