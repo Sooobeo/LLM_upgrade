@@ -45,7 +45,7 @@ def list_threads_for_owner(
     filters = [
         f"owner_id=eq.{quote(owner_id)}",
         "select=" + ",".join([
-            "id", "title", "created_at",
+            "id", "title", "created_at", "is_workspace",
             "messages(count)",
             "last:messages(content,created_at)"
         ]),
@@ -68,6 +68,7 @@ def list_threads_for_owner(
             "id": r.get("id"),
             "title": r.get("title"),
             "created_at": r.get("created_at"),
+            "is_workspace": r.get("is_workspace", False),
             "message_count": cnt,
             "last_message_preview": preview,
         })

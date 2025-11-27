@@ -1,10 +1,14 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, List
+import requests
+from urllib.parse import quote
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query
 
+from app.db import supabase as sb
 from app.db.deps import get_access_token, get_current_user
+from app.db.supabase_users import get_user_id_by_email
 from app.repository.thread import (
     add_messages_to_thread,
     create_thread_with_messages,
@@ -22,6 +26,7 @@ from app.schemas.thread import (
     ThreadDetailResp,
     ThreadsListResp,
 )
+from app.schemas.workspace import WorkspaceCreatedOut, WorkspaceMembersIn
 
 router = APIRouter(prefix="/threads", tags=["threads"])
 
@@ -215,3 +220,121 @@ def add_messages(
             status_code=500,
             detail={"code": "DB_INSERT_FAILED", "message": "Failed to insert messages into Supabase"},
         )
+
+
+@router.post("/{thread_id}/workspace", response_model=WorkspaceCreatedOut)
+def convert_to_workspace(
+    thread_id: str = Path(..., min_length=10),
+    payload: WorkspaceMembersIn = Body(...),
+    user: Dict[str, Any] = Depends(get_current_user),
+    access_token: str = Depends(get_access_token),
+):
+    """
+    Convert a thread to a workspace and add members by email.
+    """
+    owner_id = user.get("id")
+    if not owner_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    # 1) Load thread and verify ownership
+    q_thread = "&".join(
+        [
+            f"id=eq.{quote(thread_id)}",
+            "select=id,owner_id,is_workspace",
+            "limit=1",
+        ]
+    )
+    rows = sb.rest_select("threads", q_thread, access_token)
+    if not rows:
+        raise HTTPException(status_code=404, detail="Thread not found")
+    thread = rows[0]
+    if thread.get("owner_id") != owner_id:
+        raise HTTPException(status_code=403, detail="Only the owner can convert to workspace.")
+
+    # 2) Mark as workspace (RLS-enforced via caller token)
+    sb.rest_update("threads", f"id=eq.{quote(thread_id)}", {"is_workspace": True}, access_token)
+
+    # 3) Existing members to avoid duplicates
+    member_rows = sb.rest_select(
+        "thread_members", f"thread_id=eq.{quote(thread_id)}&select=user_id", access_token
+    )
+    existing_ids = {m.get("user_id") for m in member_rows if m.get("user_id")}
+
+    rows_to_add: List[Dict[str, Any]] = []
+    added: List[str] = []
+    not_found: List[str] = []
+
+    # Ensure owner is present
+    if owner_id not in existing_ids:
+        rows_to_add.append({"thread_id": thread_id, "user_id": owner_id, "role": "owner"})
+        existing_ids.add(owner_id)
+
+    # Add members by email lookup
+    for email in payload.emails:
+        try:
+            uid = get_user_id_by_email(email)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=500, detail=str(exc))
+        if not uid:
+            not_found.append(email)
+            continue
+        if uid in existing_ids:
+            added.append(email)
+            continue
+        rows_to_add.append({"thread_id": thread_id, "user_id": uid, "role": "member"})
+        existing_ids.add(uid)
+        added.append(email)
+
+    if rows_to_add:
+        try:
+            sb.rest_insert("thread_members", rows_to_add, access_token)
+        except requests.HTTPError as exc:
+            # Ignore conflict duplicates; re-raise others.
+            if not exc.response or exc.response.status_code != 409:
+                raise
+
+    return {
+        "thread_id": thread_id,
+        "is_workspace": True,
+        "added_members": added,
+        "not_found": not_found,
+    }
+
+
+@router.get("/{thread_id}/members")
+def list_thread_members(
+    thread_id: str = Path(..., min_length=10),
+    user: Dict[str, Any] = Depends(get_current_user),
+    access_token: str = Depends(get_access_token),
+):
+    """
+    List members of a workspace (owner or member can view).
+    """
+    current_user_id = user.get("id")
+    if not current_user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    # Check ownership/membership
+    q_thread = "&".join([f"id=eq.{quote(thread_id)}", "select=owner_id", "limit=1"])
+    thread_rows = sb.rest_select("threads", q_thread, access_token)
+    if not thread_rows:
+        raise HTTPException(status_code=404, detail="Thread not found")
+    is_owner = thread_rows[0].get("owner_id") == current_user_id
+    if not is_owner:
+        q_member = f"thread_id=eq.{quote(thread_id)}&user_id=eq.{quote(current_user_id)}&select=id&limit=1"
+        membership = sb.rest_select("thread_members", q_member, access_token)
+        if not membership:
+            raise HTTPException(status_code=403, detail="Not allowed")
+
+    members = sb.rest_select(
+        "thread_members",
+        "&".join(
+            [
+                f"thread_id=eq.{quote(thread_id)}",
+                "select=user_id,role,created_at",
+                "order=created_at.asc",
+            ]
+        ),
+        access_token,
+    )
+    return members

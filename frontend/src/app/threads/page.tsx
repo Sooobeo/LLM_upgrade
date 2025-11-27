@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { AppLayout } from "@/components/AppLayout";
+import { WorkspaceModal } from "@/components/WorkspaceModal";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { api } from "@/lib/api";
 import { auth } from "@/lib/auth";
@@ -12,6 +13,7 @@ type Thread = {
   id: string;
   title?: string | null;
   created_at?: string | null;
+  is_workspace?: boolean;
 };
 
 export default function ThreadsPage() {
@@ -22,33 +24,45 @@ export default function ThreadsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState(false);
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+
+  const loadThreads = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await api("/threads", { method: "GET" });
+      const list: Thread[] = Array.isArray(data) ? data : data?.threads ?? [];
+      setThreads(list);
+    } catch (err: any) {
+      console.error("threads load error:", err);
+      setError(err.message ?? String(err));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     const token = auth.getToken();
     if (!token) {
-      console.log("[ThreadsPage] no token, redirect /");
       router.push("/");
       return;
     }
 
-    async function load() {
-      try {
-        setLoading(true);
-        setError(null);
-        const data = await api("/threads", { method: "GET" });
-        const list: Thread[] = Array.isArray(data) ? data : data?.threads ?? [];
-        setThreads(list);
-      } catch (err: any) {
-        console.error("threads load error:", err);
-        setError(err.message ?? String(err));
-      } finally {
-        setLoading(false);
-      }
-    }
-
     if (!userLoading) {
-      load();
+      loadThreads();
     }
-  }, [router, userLoading]);
+  }, [router, userLoading, loadThreads]);
+
+  const openWorkspaceModal = (threadId: string) => {
+    setSelectedThreadId(threadId);
+    setIsWorkspaceModalOpen(true);
+  };
+
+  const closeWorkspaceModal = () => {
+    setSelectedThreadId(null);
+    setIsWorkspaceModalOpen(false);
+  };
 
   if (loading) {
     return (
@@ -131,23 +145,67 @@ export default function ThreadsPage() {
             {threads.map((t) => (
               <div
                 key={t.id}
-                className="group cursor-pointer rounded-2xl border border-white/10 bg-white/5 p-5 shadow-md backdrop-blur transition hover:-translate-y-1 hover:bg-white/10"
-                onClick={() => router.push(`/threads/${t.id}`)}
+                className={`group relative rounded-2xl p-5 shadow-md backdrop-blur transition hover:-translate-y-1 ${
+                  // Workspace threads get a distinct background/border color
+                  t.is_workspace
+                    ? "border border-blue-300/60 bg-blue-50/60"
+                    : "border border-white/10 bg-white/5 hover:bg-white/10"
+                }`}
               >
                 <div className="flex items-start justify-between">
-                  <h3 className="text-lg font-semibold text-white">
+                  <h3
+                    className="cursor-pointer text-lg font-semibold text-white"
+                    onClick={() => router.push(`/threads/${t.id}`)}
+                  >
                     {t.title || "제목 없음"}
                   </h3>
                   <span className="text-[11px] text-blue-200 opacity-80 group-hover:opacity-100">
                     {t.created_at ? new Date(t.created_at).toLocaleDateString() : ""}
                   </span>
                 </div>
+                {/* Workspace badge in the top-right corner */}
+                {t.is_workspace && (
+                  <span className="absolute right-3 top-3 rounded-full bg-blue-200 px-2.5 py-0.5 text-[11px] font-semibold text-blue-800">
+                    Workspace
+                  </span>
+                )}
                 <p className="mt-2 text-xs text-blue-100">내용 자세히 보기 →</p>
+                <div className="mt-4 flex gap-2">
+                  <button
+                    className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:-translate-y-0.5 hover:bg-white/15"
+                    onClick={() => router.push(`/threads/${t.id}`)}
+                  >
+                    열어 보기
+                  </button>
+                  <button
+                    className="rounded-full border border-white/20 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white transition hover:-translate-y-0.5 hover:bg-white/10"
+                    onClick={() => openWorkspaceModal(t.id)}
+                  >
+                    워크스페이스로 전환하기
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {isWorkspaceModalOpen && selectedThreadId && (
+        <WorkspaceModal
+          threadId={selectedThreadId}
+          onClose={closeWorkspaceModal}
+          onSuccess={() => {
+            // Optimistically mark the thread as workspace locally then refetch.
+            setThreads((prev) =>
+              prev.map((t) =>
+                t.id === selectedThreadId ? { ...t, is_workspace: true } : t
+              )
+            );
+            closeWorkspaceModal();
+            loadThreads();
+          }}
+        />
+      )}
     </AppLayout>
   );
 }

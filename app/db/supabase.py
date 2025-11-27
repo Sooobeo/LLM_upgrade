@@ -132,6 +132,24 @@ def rest_delete(table: str, query: str, access_token: str) -> int:
     return 0
 
 
+def rest_update(table: str, query: str, values: Dict[str, Any], access_token: str) -> Dict[str, Any]:
+    """
+    PATCH rows in a Supabase table using the caller's access token (RLS applies).
+    """
+    url = f"{_base_url()}/rest/v1/{table}?{query}"
+    headers = {
+        **_auth_headers(access_token),
+        "Prefer": "return=representation",
+        "Content-Type": "application/json",
+    }
+    r = requests.patch(url, headers=headers, json=values, timeout=15)
+    r.raise_for_status()
+    try:
+        return r.json()
+    except Exception:
+        return {}
+
+
 # ===== Access token validation =====
 async def get_user_from_access_token(access_token: str) -> Dict[str, Any]:
     """
