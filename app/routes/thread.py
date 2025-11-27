@@ -8,7 +8,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query
 
 from app.db import supabase as sb
 from app.db.deps import get_access_token, get_current_user
-from app.db.supabase_users import get_user_id_by_email
+from app.db.supabase_users import get_user_id_by_email, get_users_by_ids
 from app.repository.thread import (
     add_messages_to_thread,
     create_thread_with_messages,
@@ -337,4 +337,9 @@ def list_thread_members(
         ),
         access_token,
     )
+    ids = [m.get("user_id") for m in members if m.get("user_id")]
+    user_map = get_users_by_ids(ids) if ids else {}
+    for m in members:
+        uid = m.get("user_id")
+        m["email"] = user_map.get(uid, {}).get("email")
     return members

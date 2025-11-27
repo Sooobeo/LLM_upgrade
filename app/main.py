@@ -7,7 +7,7 @@ from fastapi.openapi.utils import get_openapi
 from pydantic import BaseModel
 
 from app.core.config import settings
-from app.routes import health, auth, thread, user
+
 from app.db.supabase import get_supabase  # 지금은 안 쓰여도 일단 둠
 
 
@@ -31,7 +31,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
+from app.routes import health, auth, thread, user
 # 라우터 연결
 app.include_router(health.router)
 app.include_router(thread.router)

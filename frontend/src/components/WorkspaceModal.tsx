@@ -26,7 +26,7 @@ export function WorkspaceModal({ threadId, onClose, onSuccess }: Props) {
   };
 
   const handleSubmit = async (e?: React.FormEvent<HTMLFormElement> | React.MouseEvent<HTMLButtonElement>) => {
-    e?.preventDefault(); // Stop any default form submission / page reload
+    e?.preventDefault();
     console.log("[workspace] handleSubmit called");
     console.log("[workspace] emails:", emails);
 
@@ -41,7 +41,7 @@ export function WorkspaceModal({ threadId, onClose, onSuccess }: Props) {
 
     try {
       const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-      console.log("[workspace] token present:", Boolean(token));
+      console.log("[workspace] token:", token);
       if (!token) {
         setError("로그인이 필요합니다.");
         return;
@@ -56,15 +56,21 @@ export function WorkspaceModal({ threadId, onClose, onSuccess }: Props) {
         },
         body: JSON.stringify({ emails }),
       });
+      console.log("[workspace] after fetch", res.status);
       const data = await res.json().catch(() => null);
+      console.log("[workspace] response body", data);
       if (!res.ok) {
         setError(data?.detail || "워크스페이스 생성 중 오류가 발생했습니다.");
         return;
       }
 
       setInfo("워크스페이스가 생성되었습니다.");
-      onSuccess?.({ threadId, data });
+      const threadIdFromResp = (data && (data.thread_id || data.id)) || threadId;
+      onSuccess?.({ threadId: threadIdFromResp, data });
+      console.log("[workspace] onSuccess called with threadId:", threadIdFromResp);
+      onClose();
     } catch (err: any) {
+      console.error("[workspace] fetch error", err);
       setError(err?.message || "네트워크 오류가 발생했습니다.");
     } finally {
       setSubmitting(false);

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { AppLayout } from "@/components/AppLayout";
+import { MembersModal } from "@/components/MembersModal";
 import { WorkspaceModal } from "@/components/WorkspaceModal";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { api } from "@/lib/api";
@@ -26,6 +27,9 @@ export default function ThreadsPage() {
 
   const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState(false);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+
+  const [isMembersModalOpen, setIsMembersModalOpen] = useState(false);
+  const [selectedMembersThreadId, setSelectedMembersThreadId] = useState<string | null>(null);
 
   const loadThreads = useCallback(async () => {
     try {
@@ -62,6 +66,16 @@ export default function ThreadsPage() {
   const closeWorkspaceModal = () => {
     setSelectedThreadId(null);
     setIsWorkspaceModalOpen(false);
+  };
+
+  const openMembersModal = (threadId: string) => {
+    setSelectedMembersThreadId(threadId);
+    setIsMembersModalOpen(true);
+  };
+
+  const closeMembersModal = () => {
+    setSelectedMembersThreadId(null);
+    setIsMembersModalOpen(false);
   };
 
   if (loading) {
@@ -170,7 +184,7 @@ export default function ThreadsPage() {
                   </span>
                 )}
                 <p className="mt-2 text-xs text-blue-100">내용 자세히 보기 →</p>
-                <div className="mt-4 flex gap-2">
+                <div className="mt-4 flex flex-wrap gap-2">
                   <button
                     className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:-translate-y-0.5 hover:bg-white/15"
                     onClick={() => router.push(`/threads/${t.id}`)}
@@ -183,6 +197,14 @@ export default function ThreadsPage() {
                   >
                     워크스페이스로 전환하기
                   </button>
+                  {t.is_workspace && (
+                    <button
+                      className="rounded-full border border-blue-300/60 bg-blue-200/20 px-3 py-1.5 text-xs font-semibold text-blue-900 transition hover:-translate-y-0.5 hover:bg-blue-200/30"
+                      onClick={() => openMembersModal(t.id)}
+                    >
+                      멤버 보기
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -194,17 +216,23 @@ export default function ThreadsPage() {
         <WorkspaceModal
           threadId={selectedThreadId}
           onClose={closeWorkspaceModal}
-          onSuccess={() => {
-            // Optimistically mark the thread as workspace locally then refetch.
-            setThreads((prev) =>
-              prev.map((t) =>
-                t.id === selectedThreadId ? { ...t, is_workspace: true } : t
-              )
-            );
+          onSuccess={(payload) => {
+            const updatedId = payload?.threadId || payload?.thread_id || selectedThreadId;
+            console.log("[threads] workspace success, updating UI for", updatedId, "payload:", payload);
+            // Optimistic update then refetch to sync with backend
+            if (updatedId) {
+              setThreads((prev) =>
+                prev.map((t) => (t.id === updatedId ? { ...t, is_workspace: true } : t))
+              );
+            }
             closeWorkspaceModal();
             loadThreads();
           }}
         />
+      )}
+
+      {isMembersModalOpen && selectedMembersThreadId && (
+        <MembersModal threadId={selectedMembersThreadId} onClose={closeMembersModal} />
       )}
     </AppLayout>
   );
