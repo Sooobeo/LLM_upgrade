@@ -1,11 +1,16 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
+import { auth } from "@/lib/auth";
 
 export default function LandingPage() {
   const [showLogin, setShowLogin] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
   const handleGoogleLogin = useCallback(() => {
@@ -14,6 +19,48 @@ export default function LandingPage() {
     const url = `${base}/auth/google/login?redirect_to=${encodeURIComponent(redirectTo)}`;
     window.location.href = url;
   }, []);
+
+  const handlePasswordLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      const base = process.env.NEXT_PUBLIC_BACKEND_API_BASE_URL;
+      const res = await fetch(`${base}/auth/login/password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        const detail = data?.detail;
+        // Normalize error to string to avoid rendering objects in React
+        const message =
+          typeof detail === "string"
+            ? detail
+            : detail?.message ||
+              detail?.error ||
+              detail?.msg ||
+              data?.msg ||
+              data?.error ||
+              "로그인에 실패했습니다.";
+        setError(message);
+        return;
+      }
+      const accessToken = data?.access_token;
+      const refreshToken = data?.refresh_token;
+      if (!accessToken) {
+        setError("유효한 토큰을 받지 못했습니다.");
+        return;
+      }
+      auth.setSession({ accessToken, refreshToken });
+      router.push("/threads");
+    } catch (err: any) {
+      setError(err?.message || "네트워크 오류가 발생했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-gradient-to-b from-[#0c1424] via-[#0d1b33] to-[#0a1022] text-white">
@@ -27,20 +74,19 @@ export default function LandingPage() {
           <p className="inline-flex items-center rounded-full bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-blue-200">
             LLM Workspace
           </p>
-          <h1 className="text-5xl font-bold md:text-6xl">LLM upgrade, 더욱 편리하게</h1>
+          <h1 className="text-5xl font-bold md:text-6xl">LLM Upgrade, more clarity</h1>
           <p className="text-lg text-blue-100 md:text-xl">
-            대화 기록을 한곳에 정리하고 더 빠르게 업무를 시작하세요. 직관적인 워크스페이스와 검색으로 생산성을 높여
-            드립니다.
+            Organize conversations and jump into your workspace quickly.
           </p>
           <div className="flex items-center justify-center gap-3 text-sm text-blue-100">
-            <span className="rounded-full border border-white/20 px-3 py-1">빠른 검색</span>
-            <span className="rounded-full border border-white/20 px-3 py-1">보안 인증</span>
-            <span className="rounded-full border border-white/20 px-3 py-1">워크플로 최적화</span>
+            <span className="rounded-full border border-white/20 px-3 py-1">Fast lookup</span>
+            <span className="rounded-full border border-white/20 px-3 py-1">Secure</span>
+            <span className="rounded-full border border-white/20 px-3 py-1">Team friendly</span>
           </div>
         </div>
 
         <button
-          aria-label="시작하기"
+          aria-label="Start"
           onClick={() => setShowLogin(true)}
           className="absolute bottom-10 inline-flex h-14 w-14 items-center justify-center rounded-full bg-white text-[#0d1b33] shadow-xl ring-2 ring-white/40 transition hover:translate-y-1 hover:bg-blue-50"
         >
@@ -67,16 +113,15 @@ export default function LandingPage() {
           <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-cyan-400/10" />
           <div className="relative grid gap-0 md:grid-cols-2">
             <div className="flex flex-col justify-center space-y-6 px-8 py-10 md:px-12 md:py-14">
-              <p className="text-sm font-semibold uppercase tracking-[0.25em] text-blue-100">로그인</p>
-              <h2 className="text-3xl font-bold md:text-4xl">시작할 준비가 되셨나요?</h2>
+              <p className="text-sm font-semibold uppercase tracking-[0.25em] text-blue-100">Login</p>
+              <h2 className="text-3xl font-bold md:text-4xl">Ready to start?</h2>
               <p className="text-sm leading-6 text-blue-100">
-                이메일과 비밀번호로 로그인하거나, 간편하게 구글 계정으로 바로 시작하세요. 안전하게 접근하고 워크플로를
-                이어가세요.
+                Sign in with Google or go straight to your workspace. If you need an account, you can sign up.
               </p>
               <div className="flex flex-wrap gap-3 text-xs text-blue-100">
-                <span className="rounded-full border border-white/20 px-3 py-1">SSO 지원</span>
-                <span className="rounded-full border border-white/20 px-3 py-1">구글 연동</span>
-                <span className="rounded-full border border-white/20 px-3 py-1">개인 데이터 보호</span>
+                <span className="rounded-full border border-white/20 px-3 py-1">SSO</span>
+                <span className="rounded-full border border-white/20 px-3 py-1">Shared</span>
+                <span className="rounded-full border border-white/20 px-3 py-1">Secure</span>
               </div>
             </div>
 
@@ -84,8 +129,8 @@ export default function LandingPage() {
               <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-600 via-indigo-500 to-cyan-400" />
               <div className="flex flex-col gap-6 px-8 py-10 md:px-10 md:py-14">
                 <div className="space-y-1">
-                  <h3 className="text-2xl font-semibold">LLM Upgrade 계정</h3>
-                  <p className="text-sm text-slate-600">로그인을 이어가거나 새로 시작하세요.</p>
+                  <h3 className="text-2xl font-semibold">LLM Upgrade</h3>
+                  <p className="text-sm text-slate-600">Jump in with Google or continue to workspace.</p>
                 </div>
 
                 <button
@@ -110,43 +155,56 @@ export default function LandingPage() {
                       fill="#ea4335"
                     />
                   </svg>
-                  구글 계정으로 계속하기
+                  Continue with Google
                 </button>
 
-                <div className="space-y-3">
-                  <label className="text-sm font-medium text-slate-700">이메일</label>
-                  <input
-                    type="email"
-                    placeholder="name@example.com"
-                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  />
-                </div>
-                <div className="space-y-3">
-                  <label className="text-sm font-medium text-slate-700">비밀번호</label>
-                  <input
-                    type="password"
-                    placeholder="••••••••"
-                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  />
-                </div>
+                <form className="space-y-3" onSubmit={handlePasswordLogin}>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">Email</label>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                      placeholder="name@example.com"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">Password</label>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                      placeholder="••••••••"
+                    />
+                  </div>
 
-                <div className="flex flex-col gap-3">
+                  {error && (
+                    <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-600">
+                      {error}
+                    </div>
+                  )}
+
                   <button
-                    onClick={() => router.push("/login")}
-                    className="w-full rounded-xl bg-[#0d1b33] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-500/20 transition hover:-translate-y-0.5 hover:bg-[#0f223e]"
+                    type="submit"
+                    disabled={loading}
+                    className="w-full rounded-xl bg-[#0d1b33] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-500/20 transition hover:-translate-y-0.5 hover:bg-[#0f223e] disabled:opacity-60"
                   >
-                    로그인하기
+                    {loading ? "Logging in..." : "Log in"}
                   </button>
                   <Link
                     href="/signup"
-                    className="w-full text-center text-sm font-semibold text-blue-700 underline underline-offset-4"
+                    className="block w-full text-center text-sm font-semibold text-blue-700 underline underline-offset-4"
                   >
-                    아직 계정이 없나요? 가입하기
+                    Need an account? Sign up
                   </Link>
-                </div>
+                </form>
               </div>
               <button
-                aria-label="메인으로 돌아가기"
+                aria-label="Back to landing"
                 onClick={() => setShowLogin(false)}
                 className="absolute left-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:scale-105"
               >
