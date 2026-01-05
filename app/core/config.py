@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     # (선택) iss/aud 검증 커스터마이즈 시
     SUPABASE_JWT_AUD: str = "authenticated"
 
+
+    # --- LLM ---
+    LLM_BASE_URL: str = "https://llm.ycc.club:443"
+    LLM_MODEL: str = "gemma3:270m"
+    LLM_TIMEOUT_SEC: int = 30
+
     # --- 쿠키/도메인 (프록시형 API 만들 때 사용) ---
     COOKIE_DOMAIN: str = "localhost"     # 예: "careon.io.kr"
     COOKIE_NAME: str = "sb-access"       # 프록시에서 access_token을 쿠키로 줄 때(선택)

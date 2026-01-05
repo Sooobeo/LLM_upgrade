@@ -52,3 +52,22 @@ class AddMessagesResp(BaseModel):
     thread_id: str
     added_count: int
     status: Literal["saved"]
+
+class ChatBody(BaseModel):
+    """
+    /threads/{thread_id}/chat 요청 바디
+    - content: 유저가 새로 보내는 메시지(1건)
+    - model: (선택) 기본 모델(settings.LLM_MODEL) 대신 특정 모델로 호출
+    - context_limit: (선택) 최근 N개 메시지를 컨텍스트로 사용
+    """
+    content: str = Field(..., min_length=1)
+    model: Optional[str] = None
+    context_limit: int = Field(default=50, ge=1, le=200)
+
+
+class ChatResp(BaseModel):
+    thread_id: str
+    user_content: str
+    assistant_content: str
+    assistant_index: Optional[int] = None
+    status: Literal["saved"] = "saved"

@@ -7,7 +7,47 @@ from app.db import supabase as sb
 
 def _normalize_role(role: str) -> str:
     r = (role or "").lower().strip()
-    return "user" if r == "user" else "assistant"
+    if r in ("user", "assistant", "system", "tool"):
+        return r
+    return "assistant"
+
+
+def _can_access_thread(user_id: str, thread_id: str, access_token: str) -> bool:
+    """
+    접근 허용 조건
+    1) threads.owner_id == user_id
+    2) threads.is_workspace == true 이고 thread_members에 user가 존재
+    """
+
+    # 1) owner check
+    q_owner = "&".join([
+        f"id=eq.{quote(thread_id)}",
+        f"owner_id=eq.{quote(user_id)}",
+        "select=id",
+        "limit=1",
+    ])
+    owner_rows = sb.rest_select("threads", q_owner, access_token)
+    if owner_rows:
+        return True
+
+    # 2) workspace + member check
+    q_thread = "&".join([
+        f"id=eq.{quote(thread_id)}",
+        "select=id,is_workspace",
+        "limit=1",
+    ])
+    trows = sb.rest_select("threads", q_thread, access_token)
+    if not trows or not trows[0].get("is_workspace"):
+        return False
+
+    q_member = "&".join([
+        f"thread_id=eq.{quote(thread_id)}",
+        f"user_id=eq.{quote(user_id)}",
+        "select=thread_id",
+        "limit=1",
+    ])
+    mrows = sb.rest_select("thread_members", q_member, access_token)
+    return bool(mrows)
 
 # 스레드 생성 + 초기 메시지 삽입
 def create_thread_with_messages(owner_id: str, payload: Dict[str, Any], access_token: str) -> str:
@@ -120,9 +160,11 @@ def delete_thread_by_id(owner_id: str, thread_id: str, access_token: str) -> int
 
 # 스레드 상세 조회
 def get_thread_detail(owner_id: str, thread_id: str, access_token: str) -> Dict[str, Any]:
+    if not _can_access_thread(owner_id, thread_id, access_token):
+        return {}
+
     q = "&".join([
         f"id=eq.{quote(thread_id)}",
-        f"owner_id=eq.{quote(owner_id)}",
         "select=" + ",".join([
             "id", "title", "created_at",
             "messages(role,content,created_at)"
@@ -149,6 +191,7 @@ def get_thread_detail(owner_id: str, thread_id: str, access_token: str) -> Dict[
         "messages": messages,
     }
 
+
 # 스레드별 메시지 목록 조회
 def list_thread_messages(
     owner_id: str,
@@ -158,20 +201,14 @@ def list_thread_messages(
     offset: int = 0,
     order: str = "asc",
 ) -> Tuple[bool, list[dict]]:
-    q_check = "&".join([
-        f"id=eq.{quote(thread_id)}",
-        f"owner_id=eq.{quote(owner_id)}",
-        "select=id",
-        "limit=1",
-    ])
-    trows = sb.rest_select("threads", q_check, access_token)
-    if not trows:
+    if not _can_access_thread(owner_id, thread_id, access_token):
         return (False, [])
 
     order = "asc" if str(order).lower() != "desc" else "desc"
+
     q_msgs = "&".join([
         f"thread_id=eq.{quote(thread_id)}",
-        "select=" + ",".join(["index", "role", "content", "created_at"]),
+        "select=index,role,content,created_at",
         f"order=index.{order}",
         f"limit={limit}",
         f"offset={offset}",
@@ -187,6 +224,7 @@ def list_thread_messages(
 
     return (True, rows)
 
+
 # 스레드에 메시지 추가
 def add_messages_to_thread(
     owner_id: str,
@@ -194,25 +232,22 @@ def add_messages_to_thread(
     messages: List[Dict[str, str]],
     access_token: str,
 ) -> Tuple[bool, int]:
-    q_check = "&".join([
-        f"id=eq.{quote(thread_id)}",
-        f"owner_id=eq.{quote(owner_id)}",
-        "select=id",
-        "limit=1",
-    ])
-    trows = sb.rest_select("threads", q_check, access_token)
-    if not trows:
+    if not _can_access_thread(owner_id, thread_id, access_token):
         return (False, 0)
+
+    now = datetime.now(timezone.utc).isoformat()
 
     rows = []
     for m in messages:
         content = (m.get("content") or "").strip()
         if not content:
             raise ValueError("Message content cannot be empty")
+
         rows.append({
             "thread_id": thread_id,
             "role": _normalize_role(m.get("role", "")),
             "content": content,
+            "created_at": now,
         })
 
     sb.rest_insert("messages", rows, access_token)
