@@ -5,6 +5,7 @@ import requests
 from urllib.parse import quote
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query
+from app.services.llm import LLMError, call_generate
 
 from app.db import supabase as sb
 from app.db.deps import get_access_token, get_current_user
@@ -16,6 +17,7 @@ from app.repository.thread import (
     get_thread_detail,
     list_thread_messages,
     list_threads_for_owner,
+    
 )
 from app.schemas.thread import (
     AddMessagesBody,
@@ -25,6 +27,8 @@ from app.schemas.thread import (
     ThreadCreateResp,
     ThreadDetailResp,
     ThreadsListResp,
+    ChatBody,
+    ChatResp,
 )
 from app.schemas.workspace import WorkspaceCreatedOut, WorkspaceMembersIn
 
@@ -220,6 +224,104 @@ def add_messages(
             status_code=500,
             detail={"code": "DB_INSERT_FAILED", "message": "Failed to insert messages into Supabase"},
         )
+
+@router.post("/{thread_id}/chat", response_model=ChatResp, status_code=200)
+def chat_and_save(
+    thread_id: str = Path(..., min_length=10),
+    body: ChatBody = Body(...),
+    user: Dict[str, Any] = Depends(get_current_user),
+    access_token: str = Depends(get_access_token),
+):
+    try:
+        owner_id = user.get("id")
+        if not owner_id:
+            raise HTTPException(
+                status_code=401,
+                detail={"code": "UNAUTHORIZED", "message": "Missing or invalid access token"},
+            )
+
+        # 1) user 메시지 저장
+        ok, _ = add_messages_to_thread(
+            owner_id=owner_id,
+            thread_id=thread_id,
+            messages=[{"role": "user", "content": body.content}],
+            access_token=access_token,
+        )
+        if not ok:
+            raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Thread not found"})
+
+        # 2) 컨텍스트 로드 (최근 N개)
+        ok, ctx_rows = list_thread_messages(
+            owner_id=owner_id,
+            thread_id=thread_id,
+            access_token=access_token,
+            limit=body.context_limit,
+            offset=0,
+            order="desc",  # 최근 메시지부터
+        )
+        if not ok:
+            raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Thread not found"})
+
+        # LLM에는 시간 순서(오래된 → 최신)로 전달
+        ctx_rows = list(reversed(ctx_rows))
+        ctx_messages = [{"role": r["role"], "content": r["content"]} for r in ctx_rows]
+
+        # 3) LLM 호출
+        assistant_text = call_generate(
+            messages=ctx_messages,
+            model=body.model,
+        )
+
+        # 4) assistant 메시지 저장
+        ok, _ = add_messages_to_thread(
+            owner_id=owner_id,
+            thread_id=thread_id,
+            messages=[{"role": "assistant", "content": assistant_text}],
+            access_token=access_token,
+        )
+        if not ok:
+            raise HTTPException(
+                status_code=403,
+                detail={"code": "FORBIDDEN", "message": "Not allowed to write assistant message"},
+            )
+
+        # 5) 방금 저장된 assistant 메시지 index 조회 (가장 최근 1개)
+        ok, last_rows = list_thread_messages(
+            owner_id=owner_id,
+            thread_id=thread_id,
+            access_token=access_token,
+            limit=1,
+            offset=0,
+            order="desc",
+        )
+        assistant_index = last_rows[0]["index"] if (ok and last_rows) else None
+
+        return {
+            "thread_id": thread_id,
+            "user_content": body.content,
+            "assistant_content": assistant_text,
+            "assistant_index": assistant_index,
+            "status": "saved",
+        }
+
+    except HTTPException:
+        raise
+    except LLMError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={"code": "LLM_FAILED", "message": str(exc)},
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "VALIDATION_ERROR", "message": str(exc)},
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "INTERNAL_ERROR", "message": f"Unexpected error: {exc}"},
+        )
+
 
 
 @router.post("/{thread_id}/workspace", response_model=WorkspaceCreatedOut)
