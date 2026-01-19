@@ -1,6 +1,10 @@
 from fastapi import APIRouter
-router = APIRouter(tags=["health"])
 
-@router.get("/health")
-def health():
-    return {"status": "ok"}
+from app.services import llm_client
+
+router = APIRouter(prefix="/health", tags=["health"])
+
+
+@router.get("/llm")
+async def llm_health():
+    return await llm_client.health_check()

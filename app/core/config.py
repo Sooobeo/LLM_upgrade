@@ -19,6 +19,16 @@ class Settings(BaseSettings):
     # --- 환경 구분 ---
     APP_ENV: AppEnv = Field(default=AppEnv.local)
 
+    # --- LLM Upstream ---
+    LLM_PRIMARY_BASE_URL: str = "https://llm.ycc.club"
+    LLM_PRIMARY_PATH: str = "/api/generate"
+    LLM_FALLBACK_BASE_URL: str | None = None
+    LLM_FALLBACK_PATH: str = "/api/generate"
+    LLM_FALLBACK_KIND: str = "same_as_primary"  # same_as_primary | ollama | openai_compatible
+    LLM_FALLBACK_MODEL: str | None = None
+    LLM_REQUEST_TIMEOUT_SECS: int = 60
+    LLM_TLS_VERIFY: bool = True
+
     # --- Supabase ---
     SUPABASE_URL: str
     # A 모드에서 필수 (클라이언트 토큰 전달 + anon 키)

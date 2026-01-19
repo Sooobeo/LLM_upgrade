@@ -1,239 +1,105 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
-import { AppLayout } from "@/components/AppLayout";
-import { MembersModal } from "@/components/MembersModal";
-import { WorkspaceModal } from "@/components/WorkspaceModal";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { api } from "@/lib/api";
+import { NewThreadModal } from "@/components/NewThreadModal";
+import { ThreadList } from "@/components/ThreadList";
+import { InlineLoginPrompt } from "@/components/InlineLoginPrompt";
 import { auth } from "@/lib/auth";
-
-type Thread = {
-  id: string;
-  title?: string | null;
-  created_at?: string | null;
-  is_workspace?: boolean;
-};
+import { listThreads, ThreadSummary } from "@/lib/threadApi";
+import { supabase } from "@/lib/supabaseClient";
+import { getSupabaseToken } from "@/lib/apiFetch";
 
 export default function ThreadsPage() {
   const router = useRouter();
-  const { loading: userLoading } = useCurrentUser({ redirectIfMissing: true });
-
-  const [threads, setThreads] = useState<Thread[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState(false);
-  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
-
-  const [isMembersModalOpen, setIsMembersModalOpen] = useState(false);
-  const [selectedMembersThreadId, setSelectedMembersThreadId] = useState<string | null>(null);
-
-  const loadThreads = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await api("/threads", { method: "GET" });
-      const list: Thread[] = Array.isArray(data) ? data : data?.threads ?? [];
-      setThreads(list);
-    } catch (err: any) {
-      console.error("threads load error:", err);
-      setError(err.message ?? String(err));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
-    const token = auth.getToken();
-    if (!token) {
-      router.push("/");
-      return;
-    }
+    let active = true;
+    getSupabaseToken().then((t) => {
+      if (!active) return;
+      setToken(t);
+    });
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!active) return;
+      const next = session?.access_token || null;
+      if (next) auth.setSession({ accessToken: next, refreshToken: session?.refresh_token || undefined });
+      setToken(next);
+    });
+    return () => {
+      active = false;
+      subscription?.subscription.unsubscribe();
+    };
+  }, [router]);
 
-    if (!userLoading) {
-      loadThreads();
-    }
-  }, [router, userLoading, loadThreads]);
+  const { data, isLoading, error, refetch } = useQuery<ThreadSummary[]>({
+    queryKey: ["threads"],
+    queryFn: () => listThreads({ limit: 20, offset: 0, order: "desc" }, token!),
+    enabled: !!token,
+  });
 
-  const openWorkspaceModal = (threadId: string) => {
-    setSelectedThreadId(threadId);
-    setIsWorkspaceModalOpen(true);
+  const threads = data || [];
+
+  const logout = async () => {
+    auth.clear();
+    await supabase.auth.signOut();
+    router.push("/login");
   };
-
-  const closeWorkspaceModal = () => {
-    setSelectedThreadId(null);
-    setIsWorkspaceModalOpen(false);
-  };
-
-  const openMembersModal = (threadId: string) => {
-    setSelectedMembersThreadId(threadId);
-    setIsMembersModalOpen(true);
-  };
-
-  const closeMembersModal = () => {
-    setSelectedMembersThreadId(null);
-    setIsMembersModalOpen(false);
-  };
-
-  if (loading) {
-    return (
-      <AppLayout>
-        <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center px-6 text-white">
-          <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-4 text-center shadow-lg backdrop-blur">
-            <p className="text-sm text-blue-100">스레드를 불러오는 중입니다...</p>
-          </div>
-        </div>
-      </AppLayout>
-    );
-  }
-
-  if (error) {
-    return (
-      <AppLayout>
-        <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center px-6 text-white">
-          <div className="max-w-md rounded-2xl border border-white/15 bg-white/5 px-6 py-5 text-sm text-red-100 shadow-lg backdrop-blur">
-            <div className="mb-1 font-semibold text-red-200">스레드를 불러오지 못했어요.</div>
-            <div className="break-all text-xs text-red-100">{error}</div>
-            <button
-              className="mt-4 rounded-lg border border-red-300/50 px-4 py-2 text-xs text-red-50 hover:bg-red-50/10"
-              onClick={() => window.location.reload()}
-            >
-              다시 시도
-            </button>
-          </div>
-        </div>
-      </AppLayout>
-    );
-  }
 
   return (
-    <AppLayout>
-      <div className="mx-auto max-w-5xl px-6 py-10">
-        <header className="mb-10 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="space-y-2">
-            <p className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-200">
-              LLM Threads
+    <div className="min-h-screen bg-slate-50">
+      <div className="mx-auto max-w-5xl px-4 py-10">
+        <header className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">Threads</p>
+            <h1 className="text-3xl font-bold text-slate-900">Your conversations</h1>
+            <p className="text-sm text-slate-600">
+              Manage threads, start a new chat, and jump back into workspaces.
             </p>
-            <div>
-              <h1 className="text-3xl font-bold md:text-4xl">나의 질문 스레드</h1>
-              <p className="mt-2 text-sm text-blue-100">
-                최근 대화를 모아보고, 이어서 작업하거나 새로운 스레드를 작성해보세요
-              </p>
-            </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <button
-              className="rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-white/15"
-              onClick={() => router.push("/threads/new")}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-100"
+              onClick={logout}
             >
-              새 스레드
+              Logout
             </button>
             <button
-              className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-xs text-blue-100 transition hover:bg-white/10"
-              onClick={() => {
-                auth.clear();
-                router.push("/");
-              }}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+              onClick={() => setIsModalOpen(true)}
             >
-              로그아웃
+              New Thread
             </button>
           </div>
         </header>
 
-        {threads.length === 0 ? (
-          <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-10 text-center text-sm text-blue-100 shadow-lg backdrop-blur">
-            <p className="font-semibold text-white">아직 저장된 스레드가 없습니다.</p>
-            <p className="mt-2 text-xs text-blue-200">새 스레드를 만들어서 대화를 시작해보세요</p>
-            <button
-              className="mt-4 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold text-white hover:bg-white/15"
-              onClick={() => router.push("/threads/new")}
-            >
-              새 스레드 만들기
-            </button>
+        {!token ? (
+          <InlineLoginPrompt title="Sign in to view your threads" message="Login to load your threads and continue." />
+        ) : error ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {(error as any)?.message || "스레드를 불러오지 못했습니다."}
           </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2">
-            {threads.map((t) => (
-              <div
-                key={t.id}
-                className={`group relative rounded-2xl p-5 shadow-md backdrop-blur transition hover:-translate-y-1 ${
-                  // Workspace threads get a distinct background/border color
-                  t.is_workspace
-                    ? "border border-blue-300/60 bg-blue-50/60"
-                    : "border border-white/10 bg-white/5 hover:bg-white/10"
-                }`}
-              >
-                <div className="flex items-start justify-between">
-                  <h3
-                    className="cursor-pointer text-lg font-semibold text-white"
-                    onClick={() => router.push(`/threads/${t.id}`)}
-                  >
-                    {t.title || "제목 없음"}
-                  </h3>
-                  <span className="text-[11px] text-blue-200 opacity-80 group-hover:opacity-100">
-                    {t.created_at ? new Date(t.created_at).toLocaleDateString() : ""}
-                  </span>
-                </div>
-                {/* Workspace badge in the top-right corner */}
-                {t.is_workspace && (
-                  <span className="absolute right-3 top-3 rounded-full bg-blue-200 px-2.5 py-0.5 text-[11px] font-semibold text-blue-800">
-                    Workspace
-                  </span>
-                )}
-                <p className="mt-2 text-xs text-blue-100">내용 자세히 보기 →</p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <button
-                    className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:-translate-y-0.5 hover:bg-white/15"
-                    onClick={() => router.push(`/threads/${t.id}`)}
-                  >
-                    열어 보기
-                  </button>
-                  <button
-                    className="rounded-full border border-white/20 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white transition hover:-translate-y-0.5 hover:bg-white/10"
-                    onClick={() => openWorkspaceModal(t.id)}
-                  >
-                    워크스페이스로 전환하기
-                  </button>
-                  {t.is_workspace && (
-                    <button
-                      className="rounded-full border border-blue-300/60 bg-blue-200/20 px-3 py-1.5 text-xs font-semibold text-blue-900 transition hover:-translate-y-0.5 hover:bg-blue-200/30"
-                      onClick={() => openMembersModal(t.id)}
-                    >
-                      멤버 보기
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
+          <ThreadList
+            threads={threads}
+            isLoading={isLoading}
+            onSelect={(id) => router.push(`/threads/${id}`)}
+            onNew={() => setIsModalOpen(true)}
+          />
         )}
       </div>
 
-      {isWorkspaceModalOpen && selectedThreadId && (
-        <WorkspaceModal
-          threadId={selectedThreadId}
-          onClose={closeWorkspaceModal}
-          onSuccess={(payload) => {
-            const updatedId = payload?.threadId || payload?.thread_id || selectedThreadId;
-            console.log("[threads] workspace success, updating UI for", updatedId, "payload:", payload);
-            // Optimistic update then refetch to sync with backend
-            if (updatedId) {
-              setThreads((prev) =>
-                prev.map((t) => (t.id === updatedId ? { ...t, is_workspace: true } : t))
-              );
-            }
-            closeWorkspaceModal();
-            loadThreads();
-          }}
-        />
-      )}
-
-      {isMembersModalOpen && selectedMembersThreadId && (
-        <MembersModal threadId={selectedMembersThreadId} onClose={closeMembersModal} />
-      )}
-    </AppLayout>
+      <NewThreadModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        token={token}
+        onCreated={() => {
+          refetch();
+        }}
+      />
+    </div>
   );
 }

@@ -3,7 +3,9 @@ from typing import Dict, Any, List, Tuple
 from uuid import uuid4
 from datetime import datetime, timezone
 from urllib.parse import quote
+
 from app.db import supabase as sb
+from app.services import llm_client
 
 def _normalize_role(role: str) -> str:
     r = (role or "").lower().strip()
@@ -217,3 +219,115 @@ def add_messages_to_thread(
 
     sb.rest_insert("messages", rows, access_token)
     return (True, len(rows))
+
+
+def _get_max_index(thread_id: str, access_token: str) -> int:
+    rows = sb.rest_select(
+        "messages",
+        "&".join(
+            [
+                f"thread_id=eq.{quote(thread_id)}",
+                "select=index",
+                "order=index.desc",
+                "limit=1",
+            ]
+        ),
+        access_token,
+    )
+    if not rows:
+        return -1
+    try:
+        return int(rows[0].get("index", -1))
+    except Exception:
+        return -1
+
+
+async def chat_with_llm(
+    owner_id: str,
+    thread_id: str,
+    content: str,
+    model: str,
+    context_limit: int,
+    access_token: str,
+) -> Dict[str, Any]:
+    """
+    Insert user message, call LLM, insert assistant message, and return summary.
+    """
+    # Ownership check
+    q_check = "&".join(
+        [
+            f"id=eq.{quote(thread_id)}",
+            f"owner_id=eq.{quote(owner_id)}",
+            "select=id",
+            "limit=1",
+        ]
+    )
+    trows = sb.rest_select("threads", q_check, access_token)
+    if not trows:
+        return {}
+
+    now = datetime.now(timezone.utc).isoformat()
+    last_idx = _get_max_index(thread_id, access_token)
+    user_index = last_idx + 1
+
+    # 1) Insert user message
+    sb.rest_insert(
+        "messages",
+        [
+            {
+                "thread_id": thread_id,
+                "role": "user",
+                "content": content.strip(),
+                "index": user_index,
+                "created_at": now,
+            }
+        ],
+        access_token,
+    )
+
+    # 2) Fetch recent messages for context (including the new one)
+    recent = sb.rest_select(
+        "messages",
+        "&".join(
+            [
+                f"thread_id=eq.{quote(thread_id)}",
+                "select=role,content,index",
+                "order=index.desc",
+                f"limit={context_limit}",
+            ]
+        ),
+        access_token,
+    )
+    recent_sorted = sorted(recent, key=lambda m: int(m.get("index", 0)))
+    llm_messages = [
+        {"role": m.get("role", "assistant"), "content": m.get("content", "")} for m in recent_sorted
+    ]
+
+    # 3) Call LLM server (with fallback)
+    assistant_content = await llm_client.generate(
+        model=model,
+        messages=llm_messages,
+    )
+
+    assistant_index = user_index + 1
+    sb.rest_insert(
+        "messages",
+        [
+            {
+                "thread_id": thread_id,
+                "role": "assistant",
+                "content": assistant_content,
+                "index": assistant_index,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+        ],
+        access_token,
+    )
+
+    return {
+        "thread_id": thread_id,
+        "user_content": content,
+        "assistant_content": assistant_content,
+        "assistant_index": assistant_index,
+        "status": "saved",
+    }

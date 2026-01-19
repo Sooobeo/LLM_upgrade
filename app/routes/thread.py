@@ -5,6 +5,7 @@ import requests
 from urllib.parse import quote
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query
+from fastapi.responses import JSONResponse
 
 from app.db import supabase as sb
 from app.db.deps import get_access_token, get_current_user
@@ -16,6 +17,7 @@ from app.repository.thread import (
     get_thread_detail,
     list_thread_messages,
     list_threads_for_owner,
+    chat_with_llm,
 )
 from app.schemas.thread import (
     AddMessagesBody,
@@ -25,8 +27,11 @@ from app.schemas.thread import (
     ThreadCreateResp,
     ThreadDetailResp,
     ThreadsListResp,
+    ChatRequest,
+    ChatResponse,
 )
 from app.schemas.workspace import WorkspaceCreatedOut, WorkspaceMembersIn
+from app.services.llm_client import LLMUpstreamError
 
 router = APIRouter(prefix="/threads", tags=["threads"])
 
@@ -343,3 +348,40 @@ def list_thread_members(
         uid = m.get("user_id")
         m["email"] = user_map.get(uid, {}).get("email")
     return members
+
+
+@router.post("/{thread_id}/chat", response_model=ChatResponse, status_code=200)
+async def chat_with_thread(
+    thread_id: str = Path(..., min_length=10),
+    body: ChatRequest = Body(...),
+    user: Dict[str, Any] = Depends(get_current_user),
+    access_token: str = Depends(get_access_token),
+):
+    owner_id = user.get("id")
+    if not owner_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    try:
+        result = await chat_with_llm(
+            owner_id=owner_id,
+            thread_id=thread_id,
+            content=body.content,
+            model=body.model or "gemma3:270m",
+            context_limit=body.context_limit,
+            access_token=access_token,
+        )
+    except LLMUpstreamError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"LLM upstream error ({exc.provider}, status={exc.status}): {repr(exc)}",
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=500, detail="Chat processing failed")
+
+    if not result:
+        # Mask missing or unauthorized as 404
+        raise HTTPException(status_code=404, detail="Thread not found")
+
+    return result

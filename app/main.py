@@ -23,6 +23,12 @@ origins = [
     "http://127.0.0.1:3001",
 ]
 
+app = FastAPI()
+
+@app.get("/")
+def root():
+    return {"ok": True, "service": "thread-api"}
+
 # CORS (필요 시 조정)
 app.add_middleware(
     CORSMiddleware,
