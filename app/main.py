@@ -7,15 +7,14 @@ from fastapi.openapi.utils import get_openapi
 from pydantic import BaseModel
 
 from app.core.config import settings
-
-from app.db.supabase import get_supabase  # 지금은 안 쓰여도 일단 둠
-
+from app.routes import auth, health, thread, user
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.PROJECT_VERSION,
     description=settings.DESCRIPTION,
 )
+
 origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
@@ -23,46 +22,36 @@ origins = [
     "http://127.0.0.1:3001",
 ]
 
-app = FastAPI()
 
 @app.get("/")
 def root():
     return {"ok": True, "service": "thread-api"}
 
-# CORS (필요 시 조정)
+
+# CORS (adjust as needed)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,  # 운영 시에는 특정 도메인으로 제한하는 것이 좋음
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-from app.routes import health, auth, thread, user
-# 라우터 연결
+
+# Routers
 app.include_router(health.router)
 app.include_router(thread.router)
 app.include_router(auth.router)
 app.include_router(user.router)
 
 
-
-
 # ==============================
-# 1) Google ID Token 교환 엔드포인트
+# 1) Google ID Token exchange
 #    POST /auth/google/exchange-id-token
 # ==============================
 @app.post("/auth/google/exchange-id-token")
 async def exchange_id_token(payload: dict):
     """
-    Google ID Token을 Supabase Auth로 교환하는 엔드포인트.
-
-    기대 바디 예시:
-    {
-      "provider": "google",
-      "id_token": "...",
-      "client_id": "...",
-      "nonce": "..." (옵션)
-    }
+    Exchange Google ID Token with Supabase Auth.
     """
     required = ["provider", "id_token", "client_id"]
     if any(k not in payload for k in required):
@@ -75,20 +64,20 @@ async def exchange_id_token(payload: dict):
             },
         )
 
-    SUPABASE_URL = (settings.SUPABASE_URL or "").rstrip("/")
-    SUPABASE_ANON_KEY = settings.SUPABASE_ANON_KEY
+    supabase_url = (settings.SUPABASE_URL or "").rstrip("/")
+    supabase_anon_key = settings.SUPABASE_ANON_KEY
 
-    if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+    if not supabase_url or not supabase_anon_key:
         raise HTTPException(
             status_code=500,
             detail="missing settings.SUPABASE_URL / settings.SUPABASE_ANON_KEY",
         )
 
-    url = f"{SUPABASE_URL}/auth/v1/token?grant_type=id_token"
+    url = f"{supabase_url}/auth/v1/token?grant_type=id_token"
     headers = {
         "Content-Type": "application/json",
-        "apikey": SUPABASE_ANON_KEY,
-        "Authorization": f"Bearer {SUPABASE_ANON_KEY}",
+        "apikey": supabase_anon_key,
+        "Authorization": f"Bearer {supabase_anon_key}",
     }
 
     async with httpx.AsyncClient(timeout=15) as client:
@@ -106,7 +95,7 @@ async def exchange_id_token(payload: dict):
 
 
 # ==============================
-# 2) owner_id 기준 메시지 검색 (임시 비활성)
+# 2) owner_id-based search (disabled placeholder)
 #    GET /messages
 # ==============================
 @app.get("/messages")
@@ -117,31 +106,22 @@ def get_messages(
     offset: int = 0,
 ):
     """
-    [미구현] 특정 owner_id의 모든 threads에 속한 messages 조회 + (선택) content 부분 검색.
-
-    지금은 BE 레포지토리에 search_messages_by_owner 함수가 없어서
-    임시로 501 에러를 반환하도록 두었어.
-
-    나중에 구현되면:
-    - app.repository 쪽에 search_messages_by_owner(supabase, owner_id, q, limit, offset)
-      함수 만든 다음
-    - 여기서 그 함수를 호출하도록 수정하면 돼.
+    Placeholder: search messages by owner (currently disabled).
     """
     raise HTTPException(
         status_code=501,
-        detail="search_messages_by_owner 미구현(/messages 임시 비활성 상태)",
+        detail="search_messages_by_owner not implemented (/messages disabled)",
     )
 
 
 # ==============================
-# 3) 환경 확인용 디버그 엔드포인트
+# 3) Environment check
 #    GET /_env_check
 # ==============================
 @app.get("/_env_check")
 def env_check():
     """
-    Supabase 관련 설정이 제대로 들어가 있는지 확인용 디버그 엔드포인트.
-    실제 운영에서는 제거하거나 보호 필요.
+    Quick env check for Supabase keys.
     """
     url = settings.SUPABASE_URL
     anon = settings.SUPABASE_ANON_KEY
@@ -155,7 +135,7 @@ def env_check():
 
 
 # ==============================
-# 4) OpenAPI 서버 URL 커스터마이즈
+# 4) OpenAPI server URL customization
 # ==============================
 def custom_openapi():
     if app.openapi_schema:
