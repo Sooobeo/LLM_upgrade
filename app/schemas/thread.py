@@ -53,20 +53,6 @@ class AddMessagesResp(BaseModel):
     added_count: int
     status: Literal["saved"]
 
-
-class ChatRequest(BaseModel):
-    content: str = Field(..., min_length=1)
-    model: Optional[str] = None
-    context_limit: int = Field(50, ge=1, le=200)
-
-
-class ChatResponse(BaseModel):
-    thread_id: str
-    user_content: str
-    assistant_content: str
-    assistant_index: int
-    status: Literal["saved"]
-
 class ChatBody(BaseModel):
     """
     /threads/{thread_id}/chat 요청 바디
