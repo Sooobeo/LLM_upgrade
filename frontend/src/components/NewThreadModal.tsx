@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createThread, postChat } from "@/lib/threadApi";
 
 const MODEL_OPTIONS = ["gemma3:270m", "llama3.1:8b", "mistral:7b"];
+const FALLBACK_MODEL = process.env.NEXT_PUBLIC_FALLBACK_MODEL;
 
 type Props = {
   isOpen: boolean;
@@ -35,6 +36,10 @@ export function NewThreadModal({ isOpen, onClose, onCreated, token }: Props) {
   const createMutation = useMutation({
     mutationFn: async () => {
       setError(null);
+      if (FALLBACK_MODEL && model !== FALLBACK_MODEL) {
+        setError(`현재 사용 가능한 모델은 ${FALLBACK_MODEL} 입니다.`);
+        throw new Error("MODEL_NOT_AVAILABLE");
+      }
       if (!token) {
         const err: any = new Error("Not logged in");
         err.code = "NO_TOKEN";

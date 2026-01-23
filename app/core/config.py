@@ -28,6 +28,12 @@ class Settings(BaseSettings):
     LLM_FALLBACK_MODEL: str | None = None
     LLM_REQUEST_TIMEOUT_SECS: int = 60
     LLM_TLS_VERIFY: bool = True
+    LLM_CONNECT_TIMEOUT: float = 5.0
+    LLM_READ_TIMEOUT: float = 120.0
+    LLM_MAX_RETRIES: int = 2
+    CHAT_DEBUG_ASSERTS: bool = False
+    LLM_MODE: str = "chat"  # "chat" | "generate"
+    APP_ENV: AppEnv = Field(default=AppEnv.local)
 
     # --- Supabase ---
     SUPABASE_URL: str

@@ -18,8 +18,9 @@ from app.repository.thread import (
     get_thread_detail,
     list_thread_messages,
     list_threads_for_owner,
-    
-    chat_with_llm,
+    insert_and_fetch_message,
+    list_messages_before_index,
+    get_first_assistant_message,
 )
 from app.schemas.thread import (
     AddMessagesBody,
@@ -35,7 +36,9 @@ from app.schemas.thread import (
     ChatResponse,
 )
 from app.schemas.workspace import WorkspaceCreatedOut, WorkspaceMembersIn
+from app.services import llm_client
 from app.services.llm_client import LLMUpstreamError
+from app.core.config import settings
 
 router = APIRouter(prefix="/threads", tags=["threads"])
 
@@ -463,27 +466,62 @@ async def chat_with_thread(
     if not owner_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
+    incoming = (body.content or "").strip()
+    if not incoming:
+        raise HTTPException(status_code=422, detail="content is required")
+    model = body.model or "gemma3:270m"
+    context_limit = body.context_limit or 50
+    context_limit = max(1, min(200, context_limit))
+
+    # 1) Persist incoming user message
+    user_row = insert_and_fetch_message(thread_id, "user", incoming, access_token)
+
+    # 2) Build context in memory
+    prior_limit = max(0, context_limit - 1)
+    before_rows = list_messages_before_index(thread_id, int(user_row.get("index", 0)), prior_limit, access_token)
+    chron = list(reversed(before_rows)) + [user_row]
+
+    if settings.CHAT_DEBUG_ASSERTS:
+        indices = [m.get("index") for m in chron]
+        if user_row.get("index") not in indices:
+            raise HTTPException(
+                status_code=500,
+                detail={"code": "CHAT_CONTEXT_MISSING_INSERTED", "inserted_index": user_row.get("index")},
+            )
+        last_user = next((m for m in reversed(chron) if m.get("role") == "user"), None)
+        if not last_user or (last_user.get("content") or "").strip() != incoming:
+            raise HTTPException(
+                status_code=500,
+                detail={"code": "CHAT_LAST_USER_WRONG", "incoming": incoming[:60]},
+            )
+
+    payload_messages = [{"role": m.get("role"), "content": m.get("content")} for m in chron]
+
     try:
-        result = await chat_with_llm(
-            owner_id=owner_id,
-            thread_id=thread_id,
-            content=body.content,
-            model=body.model or "gemma3:270m",
-            context_limit=body.context_limit,
-            access_token=access_token,
-        )
+        assistant_content = await llm_client.generate(model=model, messages=payload_messages)
     except LLMUpstreamError as exc:
         raise HTTPException(
             status_code=502,
-            detail=f"LLM upstream error ({exc.provider}, status={exc.status}): {repr(exc)}",
+            detail={
+                "code": exc.code or "LLM_FAILED",
+                "message": str(exc),
+                "provider": exc.provider,
+                "status": exc.status,
+            },
         )
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=500, detail="Chat processing failed")
 
-    if not result:
-        # Mask missing or unauthorized as 404
-        raise HTTPException(status_code=404, detail="Thread not found")
+    if not assistant_content or not assistant_content.strip():
+        raise HTTPException(
+            status_code=502,
+            detail={"code": "EMPTY_COMPLETION", "message": "LLM returned empty completion"},
+        )
 
-    return result
+    assistant_row = insert_and_fetch_message(thread_id, "assistant", assistant_content, access_token)
+
+    return {
+        "thread_id": thread_id,
+        "user_content": incoming,
+        "assistant_content": assistant_row.get("content"),
+        "assistant_index": assistant_row.get("index"),
+        "status": "saved",
+    }

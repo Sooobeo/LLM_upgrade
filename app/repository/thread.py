@@ -6,6 +6,10 @@ from urllib.parse import quote
 
 from app.db import supabase as sb
 from app.services import llm_client
+from app.core.config import settings
+import logging
+
+logger = logging.getLogger(__name__)
 
 def _normalize_role(role: str) -> str:
     r = (role or "").lower().strip()
@@ -277,6 +281,101 @@ def _get_max_index(thread_id: str, access_token: str) -> int:
         return -1
 
 
+def insert_and_fetch_message(
+    thread_id: str,
+    role: str,
+    content: str,
+    access_token: str,
+) -> Dict[str, Any]:
+    now = datetime.now(timezone.utc).isoformat()
+    last_idx = _get_max_index(thread_id, access_token)
+    new_index = last_idx + 1
+    sb.rest_insert(
+        "messages",
+        [
+            {
+                "thread_id": thread_id,
+                "role": role,
+                "content": content.strip(),
+                "index": new_index,
+                "created_at": now,
+            }
+        ],
+        access_token,
+    )
+    # Fetch back deterministically
+    rows = sb.rest_select(
+        "messages",
+        "&".join(
+            [
+                f"thread_id=eq.{quote(thread_id)}",
+                f"index=eq.{new_index}",
+                "select=index,role,content,created_at",
+                "limit=1",
+            ]
+        ),
+        access_token,
+    )
+    if not rows:
+        raise RuntimeError("Inserted message not found")
+    row = rows[0]
+    row["index"] = int(row.get("index", new_index))
+    return row
+
+
+def list_recent_messages(thread_id: str, limit: int, access_token: str) -> List[Dict[str, Any]]:
+    rows = sb.rest_select(
+        "messages",
+        "&".join(
+            [
+                f"thread_id=eq.{quote(thread_id)}",
+                "select=index,role,content,created_at",
+                "order=index.desc",
+                f"limit={limit}",
+            ]
+        ),
+        access_token,
+    )
+    return rows
+
+
+def list_messages_before_index(thread_id: str, before_index: int, limit: int, access_token: str) -> List[Dict[str, Any]]:
+    """
+    Fetch messages with index < before_index ordered desc, limited.
+    """
+    rows = sb.rest_select(
+        "messages",
+        "&".join(
+            [
+                f"thread_id=eq.{quote(thread_id)}",
+                f"index=lt.{before_index}",
+                "select=index,role,content,created_at",
+                "order=index.desc",
+                f"limit={limit}",
+            ]
+        ),
+        access_token,
+    )
+    return rows
+
+
+def get_first_assistant_message(thread_id: str, access_token: str) -> Dict[str, Any] | None:
+    rows = sb.rest_select(
+        "messages",
+        "&".join(
+            [
+                f"thread_id=eq.{quote(thread_id)}",
+                "role=eq.assistant",
+                "select=index,role,content",
+                "order=index.asc",
+                "limit=1",
+            ]
+        ),
+        access_token,
+    )
+    return rows[0] if rows else None
+
+
 async def chat_with_llm(
     owner_id: str,
     thread_id: str,
@@ -302,47 +401,175 @@ async def chat_with_llm(
         return {}
 
     now = datetime.now(timezone.utc).isoformat()
-    last_idx = _get_max_index(thread_id, access_token)
-    user_index = last_idx + 1
-
     # 1) Insert user message
-    sb.rest_insert(
-        "messages",
-        [
-            {
-                "thread_id": thread_id,
-                "role": "user",
-                "content": content.strip(),
-                "index": user_index,
-                "created_at": now,
-            }
-        ],
-        access_token,
-    )
+    user_row = insert_and_fetch_message(thread_id, "user", content, access_token)
+    incoming = content.strip()
+    saved = (user_row.get("content") or "").strip()
+    if saved != incoming and settings.CHAT_DEBUG_ASSERTS:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "CHAT_INCOMING_MISMATCH",
+                "incoming": incoming[:60],
+                "saved": saved[:60],
+                "inserted_index": user_row.get("index"),
+            },
+        )
 
-    # 2) Fetch recent messages for context (including the new one)
-    recent = sb.rest_select(
-        "messages",
-        "&".join(
-            [
-                f"thread_id=eq.{quote(thread_id)}",
-                "select=role,content,index",
-                "order=index.desc",
-                f"limit={context_limit}",
-            ]
-        ),
-        access_token,
-    )
-    recent_sorted = sorted(recent, key=lambda m: int(m.get("index", 0)))
+    # 2) Fetch recent messages for context (including the new one) AFTER insert
+    recent_desc = list_recent_messages(thread_id, context_limit, access_token)
+    chron = list(reversed(recent_desc))  # to chronological order
     llm_messages = [
-        {"role": m.get("role", "assistant"), "content": m.get("content", "")} for m in recent_sorted
+        {"role": m.get("role", "assistant"), "content": m.get("content", ""), "index": int(m.get("index", 0))}
+        for m in chron
     ]
 
+    if settings.CHAT_DEBUG_ASSERTS:
+        indices = [m["index"] for m in llm_messages]
+        if user_row.get("index") not in indices:
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "code": "CHAT_CONTEXT_MISSING_INSERTED",
+                    "inserted_index": user_row.get("index"),
+                    "first": indices[0] if indices else None,
+                    "last": indices[-1] if indices else None,
+                    "count": len(indices),
+                },
+            )
+        last_user = next((m for m in reversed(llm_messages) if m.get("role") == "user"), None)
+        if last_user:
+            if (last_user.get("content") or "").strip() != incoming:
+                from fastapi import HTTPException
+                raise HTTPException(
+                    status_code=500,
+                    detail={
+                        "code": "CHAT_LAST_USER_WRONG",
+                        "incoming": incoming[:60],
+                        "last_user_index": last_user.get("index"),
+                        "last_user_preview": (last_user.get("content") or "")[:60],
+                        "chron_first": (
+                            llm_messages[0]["index"],
+                            llm_messages[0]["role"],
+                            (llm_messages[0]["content"] or "")[:30],
+                        )
+                        if llm_messages
+                        else None,
+                        "chron_last": (
+                            llm_messages[-1]["index"],
+                            llm_messages[-1]["role"],
+                            (llm_messages[-1]["content"] or "")[:30],
+                        )
+                        if llm_messages
+                        else None,
+                    },
+                )
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail={"code": "CHAT_NO_USER_IN_CONTEXT", "incoming": incoming[:60]},
+            )
+
+    if settings.APP_ENV in ("dev", "local"):
+        last_user = next((m for m in reversed(llm_messages) if m.get("role") == "user"), None)
+        logger.info(
+            "[chat] context debug",
+            extra={
+                "thread_id": thread_id,
+                "requested_content_preview": content[:60],
+                "requested_content_len": len(content),
+                "inserted_user_index": user_row.get("index"),
+                "context_limit": context_limit,
+                "fetched_count": len(recent_desc),
+                "first_msg": {
+                    "index": llm_messages[0].get("index") if llm_messages else None,
+                    "role": llm_messages[0].get("role") if llm_messages else None,
+                    "preview": (llm_messages[0].get("content") or "")[:20] if llm_messages else None,
+                },
+                "last_msg": {
+                    "index": llm_messages[-1].get("index") if llm_messages else None,
+                    "role": llm_messages[-1].get("role") if llm_messages else None,
+                    "preview": (llm_messages[-1].get("content") or "")[:20] if llm_messages else None,
+                },
+                "last_user": {
+                    "index": last_user.get("index") if isinstance(last_user, dict) else None,
+                    "preview": last_user.get("content")[:40] if isinstance(last_user, dict) and last_user.get("content") else None,
+                }
+            },
+        )
+
     # 3) Call LLM server (with fallback)
+    payload_messages = [{"role": m["role"], "content": m["content"]} for m in llm_messages]
+    if settings.CHAT_DEBUG_ASSERTS:
+        if payload_messages[-1]["content"].strip() != incoming:
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=500,
+                detail={"code": "CHAT_PAYLOAD_LAST_USER_MISMATCH", "incoming": incoming[:60]},
+            )
+
+    # Pre-LLM debug logging
+    if settings.APP_ENV in ("dev", "local"):
+        logger.info(
+            "[chat] pre-llm",
+            extra={
+                "incoming_preview": incoming[:40],
+                "last_user_preview": (last_user.get("content") or "")[:40] if "last_user" in locals() and last_user else None,
+                "chron_first_preview": (llm_messages[0]["content"] or "")[:40] if llm_messages else None,
+                "chron_last_preview": (llm_messages[-1]["content"] or "")[:40] if llm_messages else None,
+                "first_index": llm_messages[0]["index"] if llm_messages else None,
+                "last_index": llm_messages[-1]["index"] if llm_messages else None,
+            },
+        )
+
     assistant_content = await llm_client.generate(
         model=model,
-        messages=llm_messages,
+        messages=payload_messages,
     )
+
+    assistant_row = insert_and_fetch_message(thread_id, "assistant", assistant_content, access_token)
+    saved_assistant = (assistant_row.get("content") or "").strip()
+    if saved_assistant != assistant_content.strip() and settings.CHAT_DEBUG_ASSERTS:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "ASSISTANT_SAVE_MISMATCH",
+                "assistant_preview": assistant_content[:80],
+                "saved_preview": saved_assistant[:80],
+                "assistant_index": assistant_row.get("index"),
+            },
+        )
+
+    first_asst = get_first_assistant_message(thread_id, access_token)
+    if (
+        first_asst
+        and assistant_row.get("index") != first_asst.get("index")
+        and saved_assistant == (first_asst.get("content") or "").strip()
+    ):
+        logger.warning(
+            "ASSISTANT_EQUALS_FIRST",
+            extra={
+                "thread_id": thread_id,
+                "current_index": assistant_row.get("index"),
+                "first_index": first_asst.get("index"),
+            },
+        )
+
+    if settings.APP_ENV in ("dev", "local"):
+        # Warn if echo
+        if assistant_content.strip() == incoming.strip():
+            logger.warning("[chat] assistant echoed user content", extra={"incoming_preview": incoming[:80]})
+
+    return {
+        "thread_id": thread_id,
+        "user_content": content,
+        "assistant_content": saved_assistant,
+        "assistant_index": assistant_row.get("index"),
+        "status": "saved",
+    }
 
     assistant_index = user_index + 1
     sb.rest_insert(

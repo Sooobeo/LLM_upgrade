@@ -156,6 +156,9 @@ export function ChatView() {
   const handleSend = () => {
     if (!composer.trim()) return;
     const content = composer.trim();
+    if (process.env.NODE_ENV !== "production") {
+      console.log("sending content", content, "threadId", threadId);
+    }
     const userMsg: ChatMessage = { role: "user", content, created_at: new Date().toISOString() };
     const assistantPlaceholder: ChatMessage = {
       role: "assistant",
@@ -257,9 +260,21 @@ export function ChatView() {
     <div className="flex h-full flex-col gap-4">
       <header className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Thread</p>
-            <h1 className="text-xl font-bold text-slate-900">{title || "Untitled"}</h1>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                if (typeof window !== "undefined") {
+                  window.location.href = "/threads";
+                }
+              }}
+              className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-100"
+            >
+              ← 뒤로가기
+            </button>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Thread</p>
+              <h1 className="text-xl font-bold text-slate-900">{title || "Untitled"}</h1>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <label className="text-xs font-semibold text-slate-600">Model</label>

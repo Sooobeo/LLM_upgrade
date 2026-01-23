@@ -8,14 +8,18 @@ import { NewThreadModal } from "@/components/NewThreadModal";
 import { ThreadList } from "@/components/ThreadList";
 import { InlineLoginPrompt } from "@/components/InlineLoginPrompt";
 import { auth } from "@/lib/auth";
-import { listThreads, ThreadSummary } from "@/lib/threadApi";
+import { listThreads, ThreadSummary, deleteThread, createWorkspace } from "@/lib/threadApi";
 import { supabase } from "@/lib/supabaseClient";
 import { getSupabaseToken } from "@/lib/apiFetch";
+import { WorkspaceModal } from "@/components/WorkspaceModal";
+import { WorkspaceMembersModal } from "@/components/WorkspaceMembersModal";
 
 export default function ThreadsPage() {
   const router = useRouter();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [token, setToken] = useState<string | null>(null);
+  const [workspaceThreadId, setWorkspaceThreadId] = useState<string | null>(null);
+  const [membersThreadId, setMembersThreadId] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -83,12 +87,23 @@ export default function ThreadsPage() {
             {(error as any)?.message || "스레드를 불러오지 못했습니다."}
           </div>
         ) : (
-          <ThreadList
-            threads={threads}
-            isLoading={isLoading}
-            onSelect={(id) => router.push(`/threads/${id}`)}
-            onNew={() => setIsModalOpen(true)}
-          />
+      <ThreadList
+        threads={threads}
+        isLoading={isLoading}
+        onSelect={(id) => router.push(`/threads/${id}`)}
+        onNew={() => setIsModalOpen(true)}
+        onDelete={async (id) => {
+          if (!token) return;
+          try {
+            await deleteThread(id, token);
+            refetch();
+          } catch (e: any) {
+            alert(e?.message || "삭제에 실패했습니다.");
+          }
+        }}
+        onWorkspace={(id) => setWorkspaceThreadId(id)}
+        onMembers={(id) => setMembersThreadId(id)}
+      />
         )}
       </div>
 
@@ -100,6 +115,20 @@ export default function ThreadsPage() {
           refetch();
         }}
       />
+
+      {workspaceThreadId && token && (
+        <WorkspaceModal
+          threadId={workspaceThreadId}
+          onClose={() => setWorkspaceThreadId(null)}
+          onSuccess={() => {
+            refetch();
+          }}
+        />
+      )}
+
+      {membersThreadId && (
+        <WorkspaceMembersModal threadId={membersThreadId} onClose={() => setMembersThreadId(null)} />
+      )}
     </div>
   );
 }

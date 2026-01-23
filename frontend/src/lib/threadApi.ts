@@ -70,6 +70,22 @@ export async function deleteThread(threadId: string, token: string, onDebug?: (i
   return apiFetch(`/threads/${threadId}`, { method: "DELETE" }, token, onDebug);
 }
 
+export async function createWorkspace(threadId: string, emails: string[], token?: string, onDebug?: (info: FetchDebug) => void) {
+  return apiFetch(
+    `/threads/${threadId}/workspace`,
+    {
+      method: "POST",
+      body: { emails },
+    },
+    token || undefined,
+    onDebug,
+  );
+}
+
+export async function fetchMembers(threadId: string, token?: string, onDebug?: (info: FetchDebug) => void) {
+  return apiFetch(`/threads/${threadId}/members`, { method: "GET" }, token || undefined, onDebug);
+}
+
 export async function postChat(
   threadId: string,
   payload: ChatRequest,

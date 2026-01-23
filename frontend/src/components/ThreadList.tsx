@@ -7,9 +7,12 @@ type Props = {
   isLoading?: boolean;
   onSelect: (threadId: string) => void;
   onNew: () => void;
+  onDelete?: (threadId: string) => void;
+  onWorkspace?: (threadId: string) => void;
+  onMembers?: (threadId: string) => void;
 };
 
-export function ThreadList({ threads, isLoading, onSelect, onNew }: Props) {
+export function ThreadList({ threads, isLoading, onSelect, onNew, onDelete, onWorkspace, onMembers }: Props) {
   if (isLoading) {
     return (
       <div className="rounded-xl border border-slate-200 bg-white px-4 py-6 text-sm text-slate-600 shadow-sm">
@@ -59,11 +62,49 @@ export function ThreadList({ threads, isLoading, onSelect, onNew }: Props) {
                   <p className="mt-1 text-xs text-slate-600 line-clamp-2">{t.last_message_preview}</p>
                 )}
               </div>
-              {t.is_workspace && (
-                <span className="rounded-full bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-700">
-                  Workspace
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {t.is_workspace && (
+                  <span className="rounded-full bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-700">
+                    Workspace
+                  </span>
+                )}
+                {onDelete && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(t.id);
+                    }}
+                    className="rounded-full border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-100"
+                  >
+                    삭제
+                  </button>
+                )}
+                {onWorkspace && !t.is_workspace && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onWorkspace(t.id);
+                    }}
+                    className="rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-100"
+                  >
+                    Make workspace
+                  </button>
+                )}
+                {onMembers && t.is_workspace && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onMembers(t.id);
+                    }}
+                    className="rounded-full border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-800 hover:bg-slate-100"
+                  >
+                    Members
+                  </button>
+                )}
+              </div>
             </div>
             <div className="mt-auto flex items-center gap-3 pt-3 text-[11px] text-slate-500">
               <span>{t.message_count ?? 0} msgs</span>

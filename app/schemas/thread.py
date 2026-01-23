@@ -71,3 +71,10 @@ class ChatResp(BaseModel):
     assistant_content: str
     assistant_index: Optional[int] = None
     status: Literal["saved"] = "saved"
+
+# Backward-compatible aliases
+class ChatRequest(ChatBody):
+    pass
+
+class ChatResponse(ChatResp):
+    pass
