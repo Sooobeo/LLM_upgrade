@@ -38,13 +38,7 @@ export function ThreadList({ threads, isLoading, onSelect, onNew, onDelete, onWo
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-slate-900">Recent threads</h2>
-        <button
-          className="rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
-          onClick={onNew}
-        >
-          New Thread
-        </button>
+        <h2 className="text-lg font-semibold text-slate-900 text-white/90">Recent threads</h2>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         {threads.map((t) => (

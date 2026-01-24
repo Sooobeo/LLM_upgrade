@@ -54,59 +54,78 @@ export default function ThreadsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="mx-auto max-w-5xl px-4 py-10">
-        <header className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">Threads</p>
-            <h1 className="text-3xl font-bold text-slate-900">Your conversations</h1>
-            <p className="text-sm text-slate-600">
-              Manage threads, start a new chat, and jump back into workspaces.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-100"
-              onClick={logout}
-            >
-              Logout
-            </button>
-            <button
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
-              onClick={() => setIsModalOpen(true)}
-            >
-              New Thread
-            </button>
-          </div>
-        </header>
+    <div className="min-h-screen bg-gradient-to-b from-[#0c1424] via-[#0d1b33] to-[#0a1022] text-white">
+      <div className="mx-auto max-w-5xl px-4 py-12">
+        {/* ===== Glass Card ===== */}
+        <div className="rounded-3xl border border-white/15 bg-white/5 backdrop-blur-xl px-6 py-8 md:px-10 md:py-10">
+          {/* ===== Header ===== */}
+          <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-blue-200">
+                Threads
+              </p>
+              <h1 className="text-3xl font-bold text-white md:text-4xl">
+                Your conversations
+              </h1>
+              <p className="text-sm text-blue-100">
+                Manage threads, start a new chat, and jump back into workspaces.
+              </p>
+            </div>
 
-        {!token ? (
-          <InlineLoginPrompt title="Sign in to view your threads" message="Login to load your threads and continue." />
-        ) : error ? (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {(error as any)?.message || "스레드를 불러오지 못했습니다."}
-          </div>
-        ) : (
-      <ThreadList
-        threads={threads}
-        isLoading={isLoading}
-        onSelect={(id) => router.push(`/threads/${id}`)}
-        onNew={() => setIsModalOpen(true)}
-        onDelete={async (id) => {
-          if (!token) return;
-          try {
-            await deleteThread(id, token);
-            refetch();
-          } catch (e: any) {
-            alert(e?.message || "삭제에 실패했습니다.");
-          }
-        }}
-        onWorkspace={(id) => setWorkspaceThreadId(id)}
-        onMembers={(id) => setMembersThreadId(id)}
-      />
-        )}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={logout}
+                className="rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/10"
+              >
+                Logout
+              </button>
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="rounded-xl bg-gradient-to-r from-blue-500 to-cyan-400 px-5 py-2 text-sm font-semibold text-white shadow transition hover:-translate-y-0.5 hover:shadow-lg"
+              >
+                New Thread
+              </button>
+            </div>
+          </header>
+
+          {/* ===== Content ===== */}
+          {!token ? (
+            <div className="rounded-2xl border border-white/15 bg-white/5 p-6 backdrop-blur">
+              <InlineLoginPrompt
+                title="Sign in to view your threads"
+                message="Login to load your threads and continue."
+              />
+            </div>
+          ) : error ? (
+            <div className="rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-200 backdrop-blur">
+              {(error as any)?.message || "스레드를 불러오지 못했습니다."}
+            </div>
+          ) : (
+            <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+
+              <ThreadList
+                threads={threads}
+                isLoading={isLoading}
+                onSelect={(id) => router.push(`/threads/${id}`)}
+                onNew={() => setIsModalOpen(true)}
+                onDelete={async (id) => {
+                  if (!token) return;
+                  try {
+                    await deleteThread(id, token);
+                    refetch();
+                  } catch (e: any) {
+                    alert(e?.message || "삭제에 실패했습니다.");
+                  }
+                }}
+                onWorkspace={(id) => setWorkspaceThreadId(id)}
+                onMembers={(id) => setMembersThreadId(id)}
+              />
+            </div>
+          )}
+        </div>
       </div>
 
+      {/* ===== Modals ===== */}
       <NewThreadModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -127,7 +146,10 @@ export default function ThreadsPage() {
       )}
 
       {membersThreadId && (
-        <WorkspaceMembersModal threadId={membersThreadId} onClose={() => setMembersThreadId(null)} />
+        <WorkspaceMembersModal
+          threadId={membersThreadId}
+          onClose={() => setMembersThreadId(null)}
+        />
       )}
     </div>
   );
