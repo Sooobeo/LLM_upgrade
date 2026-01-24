@@ -10,7 +10,7 @@ type Props = {
   onSelect: (threadId: string) => void;
   onNew: () => void;
   onDelete?: (threadId: string) => void;
-  onWorkspace?: (threadId: string) => void;
+  onWorkspace?: (thread: ThreadSummary) => void;
   onMembers?: (threadId: string) => void;
 };
 
@@ -66,16 +66,16 @@ export function ThreadList({ threads, isLoading, onSelect, onNew, onDelete, onWo
             )}
 
             {/* Actions */}
-            {onWorkspace && !t.is_workspace && (
+            {onWorkspace && (
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onWorkspace(t.id);
+                  onWorkspace(t);
                 }}
                 className="shrink-0 rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-100"
               >
-                Make workspace
+                Set workspace
               </button>
             )}
 

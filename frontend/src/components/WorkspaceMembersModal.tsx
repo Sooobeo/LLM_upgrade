@@ -113,7 +113,7 @@ export function WorkspaceMembersModal({ threadId, onClose }: Props) {
           <textarea
             value={emailInput}
             onChange={(e) => setEmailInput(e.target.value)}
-            placeholder="user1@example.com, user2@example.com"
+            placeholder="user@example.com"
             className="w-full rounded-xl border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white focus:border-blue-400 focus:outline-none"
           />
           <button

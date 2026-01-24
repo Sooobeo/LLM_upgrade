@@ -5,7 +5,7 @@ import { useState } from "react";
 type Props = {
   threadId: string;
   onClose: () => void;
-  onSuccess?: (data: any) => void;
+  onSuccess?: (threadId: string) => void;
 };
 
 const API_BASE = process.env.NEXT_PUBLIC_BACKEND_API_BASE_URL;
@@ -65,10 +65,14 @@ export function WorkspaceModal({ threadId, onClose, onSuccess }: Props) {
       }
 
       setInfo("워크스페이스가 생성되었습니다.");
+
       const threadIdFromResp = (data && (data.thread_id || data.id)) || threadId;
-      onSuccess?.({ threadId: threadIdFromResp, data });
-      console.log("[workspace] onSuccess called with threadId:", threadIdFromResp);
-      onClose();
+      onSuccess?.(threadIdFromResp);
+
+      setTimeout(() => {
+        onClose();
+      }, 800);
+
     } catch (err: any) {
       console.error("[workspace] fetch error", err);
       setError(err?.message || "네트워크 오류가 발생했습니다.");

@@ -13,6 +13,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { getSupabaseToken } from "@/lib/apiFetch";
 import { WorkspaceModal } from "@/components/WorkspaceModal";
 import { WorkspaceMembersModal } from "@/components/WorkspaceMembersModal";
+import { fetchMembers } from "@/lib/threadApi";
 
 export default function ThreadsPage() {
   const router = useRouter();
@@ -117,8 +118,19 @@ export default function ThreadsPage() {
                     alert(e?.message || "삭제에 실패했습니다.");
                   }
                 }}
-                onWorkspace={(id) => setWorkspaceThreadId(id)}
-                onMembers={(id) => setMembersThreadId(id)}
+                onWorkspace={async (thread) => {
+                  try {
+                    const members = await fetchMembers(thread.id);
+
+                    if (members.length <= 1) {
+                      setWorkspaceThreadId(thread.id);
+                    } else {
+                      setMembersThreadId(thread.id);
+                    }
+                  } catch (e) {
+                    alert("워크스페이스 정보를 불러오지 못했습니다.");
+                  }
+                }}
               />
             </div>
           )}
@@ -139,10 +151,13 @@ export default function ThreadsPage() {
         <WorkspaceModal
           threadId={workspaceThreadId}
           onClose={() => setWorkspaceThreadId(null)}
-          onSuccess={() => {
+          onSuccess={(threadId) => {
             refetch();
+            setWorkspaceThreadId(null);
+            setMembersThreadId(threadId); 
           }}
         />
+
       )}
 
       {membersThreadId && (
