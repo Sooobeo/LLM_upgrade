@@ -16,7 +16,8 @@ type Props = {
 
 export function ThreadList({ threads, isLoading, onSelect, onNew, onDelete, onWorkspace, onMembers }: Props) {
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
-  
+  const [loadingWorkspaceId, setLoadingWorkspaceId] = useState<string | null>(null);
+
   if (isLoading) {
     return (
       <div className="rounded-xl border border-slate-200 bg-white px-4 py-6 text-sm text-slate-600 shadow-sm">
@@ -69,13 +70,32 @@ export function ThreadList({ threads, isLoading, onSelect, onNew, onDelete, onWo
             {onWorkspace && (
               <button
                 type="button"
-                onClick={(e) => {
+                disabled={loadingWorkspaceId === t.id}
+                onClick={async (e) => {
                   e.stopPropagation();
-                  onWorkspace(t);
+                  setLoadingWorkspaceId(t.id);
+                  try {
+                    await onWorkspace(t); // ← 비동기라고 가정
+                  } finally {
+                    setLoadingWorkspaceId(null);
+                  }
                 }}
-                className="shrink-0 rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-100"
+                className={`shrink-0 rounded-full border px-2 py-1 text-[11px] font-semibold
+                  ${
+                    loadingWorkspaceId === t.id
+                      ? "cursor-not-allowed border-blue-200 bg-blue-100 text-blue-600"
+                      : "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                  }
+                `}
               >
-                Set workspace
+                {loadingWorkspaceId === t.id ? (
+                  <span className="flex items-center gap-1">
+                    <span className="h-3 w-3 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
+                    Setting...
+                  </span>
+                ) : (
+                  "Set workspace"
+                )}
               </button>
             )}
 
@@ -84,7 +104,7 @@ export function ThreadList({ threads, isLoading, onSelect, onNew, onDelete, onWo
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setDeleteTargetId(t.id); // ✅ 모달 열기
+                  setDeleteTargetId(t.id);
                 }}
                 className="shrink-0 rounded-full border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-100"
               >
