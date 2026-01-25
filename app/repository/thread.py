@@ -191,38 +191,46 @@ def delete_thread_by_id(user_id: str, thread_id: str, access_token: str) -> int:
     deleted = sb.rest_delete("threads", f"id=eq.{quote(thread_id)}", access_token)
     return deleted
 
-# 스레드 상세 조회
-def get_thread_detail(owner_id: str, thread_id: str, access_token: str) -> Dict[str, Any]:
-    if not _can_access_thread(owner_id, thread_id, access_token):
-        return {}
 
-    q = "&".join([
-        f"id=eq.{quote(thread_id)}",
-        "select=" + ",".join([
-            "id", "title", "created_at",
-            "messages(index,role,content,created_at)"
-        ]),
-        "messages.order=index.asc",
-        "limit=1",
-    ])
+def get_thread_detail(user_id: str, thread_id: str, access_token: str):
+    q = "&".join(
+        [
+            f"id=eq.{quote(thread_id)}",
+            "select=id,title,created_at,is_workspace,owner_id",
+            "limit=1",
+        ]
+    )
     rows = sb.rest_select("threads", q, access_token)
     if not rows:
-        return {}
+        return None
 
-    row = rows[0]
-    msgs = row.get("messages") or []
-    messages = [{
-        "role": (m.get("role") or "assistant"),
-        "content": m.get("content") or "",
-        "created_at": m.get("created_at") or "",
-    } for m in msgs]
+    thread = rows[0]
 
-    return {
-        "id": row.get("id"),
-        "title": row.get("title"),
-        "created_at": row.get("created_at"),
-        "messages": messages,
-    }
+    if thread["owner_id"] != user_id:
+        m = sb.rest_select(
+            "thread_members",
+            "&".join([
+                f"thread_id=eq.{quote(thread_id)}",
+                f"user_id=eq.{quote(user_id)}",
+                "limit=1",
+            ]),
+            access_token,
+        )
+        if not m:
+            return None
+
+    _, messages = list_thread_messages(
+        owner_id=thread["owner_id"],
+        thread_id=thread_id,
+        access_token=access_token,
+        limit=200,
+        offset=0,
+        order="asc",
+    )
+
+    thread["messages"] = messages
+    return thread
+
 
 
 # 스레드별 메시지 목록 조회

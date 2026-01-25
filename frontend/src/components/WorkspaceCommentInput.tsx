@@ -13,8 +13,17 @@ export function WorkspaceCommentInput({ onAdd }: Props) {
       <input
         value={value}
         onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            const v = value.trim();
+            if (!v) return;
+            onAdd(v);
+            setValue("");
+          }
+        }}
         placeholder="코멘트 추가"
-        className="flex-1 rounded-lg border border-slate-200 px-2 py-1 text-xs focus:border-blue-400 focus:outline-none"
+        className="flex-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-white placeholder:text-white/40 focus:outline-none focus:ring-1 focus:ring-blue-400"
       />
       <button
         type="button"
@@ -24,6 +33,7 @@ export function WorkspaceCommentInput({ onAdd }: Props) {
           onAdd(v);
           setValue("");
         }}
+        disabled={!value.trim()}
         className="rounded-lg bg-blue-500 px-2 py-1 text-xs font-semibold text-white hover:bg-blue-600"
       >
         추가

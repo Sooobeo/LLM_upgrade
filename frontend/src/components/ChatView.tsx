@@ -37,10 +37,9 @@ export function ChatView() {
   }>({});
   const [token, setToken] = useState<string | null>(null);
   const hasToken = !!token;
-  const [isWorkspace, setIsWorkspace] = useState<boolean>(false);
   const [comments, setComments] = useState<Record<string, string[]>>({});
   const [commentAuthor, setCommentAuthor] = useState("me");
-
+  
   useEffect(() => {
     let active = true;
     getSupabaseToken().then((t) => {
@@ -77,15 +76,18 @@ export function ChatView() {
     }
   }, [threadId]);
 
-  const saveComments = (next: Record<string, string[]>) => {
-    setComments(next);
-    if (typeof window !== "undefined") {
-      try {
-        window.localStorage.setItem(`thread_comments_${threadId}`, JSON.stringify(next));
-      } catch {
-        // ignore
+  const saveComments = (
+    updater: Record<string, string[]> | ((prev: Record<string, string[]>) => Record<string, string[]>)
+  ) => {
+    setComments((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.setItem(`thread_comments_${threadId}`, JSON.stringify(next));
+        } catch {}
       }
-    }
+      return next;
+    });
   };
 
   const addComment = (index: number | string, text: string) => {
@@ -120,26 +122,14 @@ export function ChatView() {
     enabled: isValidThreadId && !!token,
   });
 
-  useQuery({
-    queryKey: ["threads", "workspaceFlag"],
-    queryFn: () => listThreads({ limit: 100, offset: 0, order: "desc" }, token!),
-    enabled: !!token,
-    onSuccess: (threads) => {
-      const found = (threads || []).find((t: any) => t.id === threadId);
-      if (found && found.is_workspace) setIsWorkspace(true);
-    },
-  });
+  const isWorkspace = !!data?.is_workspace;
 
   useEffect(() => {
-    if (data?.messages) {
-      setMessages(
-        data.messages.map((m, i) => ({
-          ...m,
-          index: (m as any).index ?? i,
-        })),
-      );
-    }
-  }, [data?.messages]);
+    setMessages([]);
+    setMatches([]);
+    setMatchIndex(0);
+    setHighlighted(null);
+  }, [threadId]);
 
   const chatMutation = useMutation({
     mutationFn: async (content: string) => {
@@ -172,7 +162,6 @@ export function ChatView() {
       );
     },
     onSuccess: (resp) => {
-      // Replace placeholder assistant message with the real one
       setMessages((prev) => {
         const updated = [...prev];
         if (pendingAssistantIndex != null && updated[pendingAssistantIndex]) {
@@ -194,7 +183,9 @@ export function ChatView() {
     },
     onError: async (err: any) => {
       setPendingAssistantIndex(null);
-      setMessages((prev) => prev.filter((_, idx) => idx !== pendingAssistantIndex));
+      if (pendingAssistantIndex != null) {
+        setMessages((prev) => prev.filter((_, idx) => idx !== pendingAssistantIndex));
+      }
       const masked404 =
         err?.status === 404
           ? "Thread not found or no access (masked 404). Check token and thread id."
@@ -276,6 +267,17 @@ export function ChatView() {
 
   const title = data?.title || "Thread";
 
+  useEffect(() => {
+    if (!data?.messages) return;
+
+    setMessages(
+      data.messages.map((m, i) => ({
+        ...m,
+        index: (m as any).index ?? i,
+      })),
+    );
+  }, [data?.messages]);
+
   if (!isValidThreadId) {
     return (
       <div className="flex h-full flex-col gap-2 rounded-2xl border border-red-200 bg-red-50 p-4 text-red-700">
@@ -316,10 +318,18 @@ export function ChatView() {
     );
   }
 
+  console.log("isWorkspace", data?.is_workspace, data);
+  
   return (
-    <div className={`flex h-full flex-col gap-4 ${isWorkspace ? "bg-indigo-50 p-2 rounded-2xl" : ""}`}>
-      <header className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+    <div
+      className={`fixed inset-0 overflow-hidden bg-gradient-to-b from-[#0c1424] via-[#0d1b33] to-[#0a1022] text-white ${
+        isWorkspace ? "bg-indigo-50 p-2 rounded-2xl" : ""
+      }`}
+    >
+    <div className="mx-auto flex h-full max-w-5xl flex-col gap-4 p-10">
+      {/* Header */}
+      <header className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur shadow-lg">
+        <div className="flex flex-wrap items-center justify-between gap-3 p-2">
           <div className="flex items-center gap-3">
             <button
               onClick={() => {
@@ -327,33 +337,39 @@ export function ChatView() {
                   window.location.href = "/threads";
                 }
               }}
-              className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-100"
+              className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-sm font-semibold text-white/80 hover:bg-white/10"
             >
-              ← 뒤로가기
+              ←
             </button>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Thread</p>
-              <h1 className="text-xl font-bold text-slate-900">{title || "Untitled"}</h1>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/50">
+                Thread
+              </p>
+              <h1 className="text-xl font-bold text-white/90">
+                {title || "Untitled"}
+              </h1>
             </div>
           </div>
+
           <div className="flex items-center gap-2">
-            <label className="text-xs font-semibold text-slate-600">Model</label>
+            <label className="text-xs font-semibold text-white/60">Model</label>
             <select
               value={selectedModel}
               onChange={(e) => {
                 setSelectedModel(e.target.value);
                 setModel(threadId, e.target.value);
               }}
-              className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm"
+              className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-sm text-white focus:outline-none"
             >
               {MODEL_OPTIONS.map((m) => (
-                <option key={m} value={m}>
+                <option key={m} value={m} className="text-black">
                   {m}
                 </option>
               ))}
             </select>
           </div>
         </div>
+
         <ThreadSearchBar
           query={searchQuery}
           onQueryChange={setSearchQuery}
@@ -365,48 +381,50 @@ export function ChatView() {
         />
       </header>
 
-      <div className="w-full max-w-4xl">
-        <div
-          className={`aspect-square max-h-[75vh] overflow-y-auto rounded-2xl border p-4 shadow-sm ${
-            isWorkspace ? "border-indigo-200 bg-indigo-50" : "border-slate-200 bg-white"
-          }`}
-        >
+      {/* Messages */}
+        <div className="flex-1 overflow-y-auto rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur shadow-lg">
           <div className="space-y-4">
             {messages.map((m, idx) => (
               <div
                 key={idx}
                 id={`msg-${idx}`}
-                className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
+                className={`flex ${
+                  m.role === "user" ? "justify-end" : "justify-start"
+                }`}
               >
                 <div
-                  className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm shadow-sm ${
-                    m.role === "user" ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-900"
+                  className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm shadow-md ${
+                    m.role === "user"
+                      ? "bg-blue-600 text-white"
+                      : "bg-white/10 text-white/90"
                   } ${highlighted === idx ? "ring-2 ring-amber-400" : ""}`}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="text-[11px] uppercase tracking-wide opacity-70">
-                      {isWorkspace ? (m.role === "user" ? "Workspace User" : "Workspace Assistant") : m.role}
-                    </div>
-                    {isWorkspace && (
-                      <span className="text-[10px] rounded-full bg-white/20 px-2 py-0.5 text-white">
-                        {m.role === "user" ? `Member #${idx + 1}` : "Assistant"}
-                      </span>
-                    )}
+                  <div className="text-[11px] uppercase tracking-wide opacity-60">
+                    {m.role}
                   </div>
-                  <div className="mt-1 whitespace-pre-wrap leading-relaxed">{m.content}</div>
-                  {m.role === "assistant" && (
-                    <div className="mt-2 space-y-2">
+
+                  <div className="mt-1 whitespace-pre-wrap leading-relaxed">
+                    {m.content}
+                  </div>
+
+                  {/* Workspace 댓글 */}
+                  {isWorkspace && m.role === "assistant" && (
+                    <div className="mt-3 space-y-2">
                       <div className="space-y-1">
                         {(comments[String((m as any).index ?? idx)] || []).map((c, ci) => (
-                          <div key={ci} className="rounded-lg bg-white/30 px-2 py-1 text-xs text-slate-900">
+                          <div
+                            key={ci}
+                            className="rounded-lg bg-white/10 px-2 py-1 text-xs text-white/80"
+                          >
                             {c}
                           </div>
                         ))}
                       </div>
+
                       <WorkspaceCommentInput
                         onAdd={(text) => {
                           const msgIndex = (m as any).index ?? idx;
-                          addComment(String(msgIndex), text);
+                          addComment(msgIndex, text);
                         }}
                       />
                     </div>
@@ -416,39 +434,32 @@ export function ChatView() {
             ))}
           </div>
         </div>
-      </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      {/* Composer */}
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur shadow-lg">
         <div className="flex items-start gap-3">
           <textarea
             value={composer}
             onChange={(e) => setComposer(e.target.value)}
             placeholder="메시지를 입력하세요"
-            className="min-h-[64px] flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+            className="min-h-[64px] flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400"
           />
           <button
             onClick={handleSend}
             disabled={chatMutation.isPending}
-            className="h-11 shrink-0 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-50"
+            className="h-11 shrink-0 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-md transition hover:bg-blue-700 disabled:opacity-50"
           >
             {chatMutation.isPending ? "Sending..." : "Send"}
           </button>
         </div>
+
         {sendError && (
-          <div className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{sendError}</div>
+          <div className="mt-2 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300">
+            {sendError}
+          </div>
         )}
       </div>
-
-      {process.env.NODE_ENV !== "production" && (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-white p-3 text-xs text-slate-700 shadow-sm">
-          <div className="font-semibold">Debug (chat request)</div>
-          <div>Thread: {threadId}</div>
-          <div>Has token: {String(hasToken)}</div>
-          <div>URL: {debugInfo.url || "n/a"}</div>
-          <div>Status: {debugInfo.status ?? "n/a"}</div>
-          <div>Body snippet: {debugInfo.bodySnippet ? String(debugInfo.bodySnippet).slice(0, 200) : "n/a"}</div>
-        </div>
-      )}
     </div>
-  );
+  </div>
+);
 }

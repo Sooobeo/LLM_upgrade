@@ -41,21 +41,13 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 px-4">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 px-4">
+      {/* Login Card */}
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-8 text-white shadow-2xl backdrop-blur">
-        <div className="mb-4 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() => router.push("/")}
-            className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-blue-50 hover:bg-white/10"
-          >
-            ← 뒤로가기
-          </button>
-          <div className="text-right">
-            <h1 className="text-2xl font-bold">Log in</h1>
-            <p className="mt-1 text-sm text-blue-100">Sign in with your Supabase credentials.</p>
-          </div>
-        </div>
+        <h1 className="text-2xl font-bold">Log in</h1>
+        <p className="mt-1 text-sm text-blue-100">
+          Sign in with your Supabase credentials.
+        </p>
 
         <form className="mt-6 space-y-4" onSubmit={handleLogin}>
           <div>
@@ -69,6 +61,7 @@ export default function LoginPage() {
               placeholder="name@example.com"
             />
           </div>
+
           <div>
             <label className="text-sm font-semibold text-blue-50">Password</label>
             <input
@@ -81,7 +74,11 @@ export default function LoginPage() {
             />
           </div>
 
-          {error && <div className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-200">{error}</div>}
+          {error && (
+            <div className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-200">
+              {error}
+            </div>
+          )}
 
           <button
             type="submit"
@@ -92,6 +89,14 @@ export default function LoginPage() {
           </button>
         </form>
       </div>
+
+      {/* Back to landing (caption) */}
+      <button
+        onClick={() => router.push("/")}
+        className="mt-4 text-xs text-blue-200/70 transition hover:text-white"
+      >
+        ← Back to landing page
+      </button>
     </div>
   );
 }

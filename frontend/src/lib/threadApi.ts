@@ -20,6 +20,7 @@ export type ThreadDetail = {
   title: string | null;
   created_at: string;
   messages: ChatMessage[];
+  is_workspace?: boolean;
 };
 
 export type ChatRequest = {
@@ -101,6 +102,24 @@ export async function postChat(
     {
       method: "POST",
       body: payload,
+    },
+    token,
+    onDebug,
+  );
+}
+
+export async function setWorkspace(
+  threadId: string,
+  token: string,
+  onDebug?: (info: FetchDebug) => void,
+) {
+  return apiFetch(
+    `/threads/${threadId}/workspace`,
+    {
+      method: "PATCH",
+      body: {
+        is_workspace: true,
+      },
     },
     token,
     onDebug,
