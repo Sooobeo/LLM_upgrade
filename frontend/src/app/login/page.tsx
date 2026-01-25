@@ -43,8 +43,19 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 px-4">
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-8 text-white shadow-2xl backdrop-blur">
-        <h1 className="text-2xl font-bold">Log in</h1>
-        <p className="mt-1 text-sm text-blue-100">Sign in with your Supabase credentials.</p>
+        <div className="mb-4 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => router.push("/")}
+            className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-blue-50 hover:bg-white/10"
+          >
+            ← 뒤로가기
+          </button>
+          <div className="text-right">
+            <h1 className="text-2xl font-bold">Log in</h1>
+            <p className="mt-1 text-sm text-blue-100">Sign in with your Supabase credentials.</p>
+          </div>
+        </div>
 
         <form className="mt-6 space-y-4" onSubmit={handleLogin}>
           <div>

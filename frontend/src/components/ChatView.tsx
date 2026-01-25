@@ -5,12 +5,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 
 import { getModel, setModel } from "@/lib/modelStore";
-import { ChatMessage, getThread, postChat } from "@/lib/threadApi";
+import { ChatMessage, getThread, listThreads, postChat } from "@/lib/threadApi";
 import { getSupabaseToken } from "@/lib/apiFetch";
 import { ThreadSearchBar } from "./ThreadSearchBar";
 import { supabase } from "@/lib/supabaseClient";
 import { auth } from "@/lib/auth";
 import { InlineLoginPrompt } from "./InlineLoginPrompt";
+import { WorkspaceCommentInput } from "./WorkspaceCommentInput";
 
 const MODEL_OPTIONS = ["gemma3:270m", "llama3.1:8b", "mistral:7b"];
 const UUID_REGEX = /^[0-9a-fA-F-]{36}$/;
@@ -36,6 +37,9 @@ export function ChatView() {
   }>({});
   const [token, setToken] = useState<string | null>(null);
   const hasToken = !!token;
+  const [isWorkspace, setIsWorkspace] = useState<boolean>(false);
+  const [comments, setComments] = useState<Record<string, string[]>>({});
+  const [commentAuthor, setCommentAuthor] = useState("me");
 
   useEffect(() => {
     let active = true;
@@ -47,12 +51,53 @@ export function ChatView() {
       const next = session?.access_token || null;
       if (next) auth.setSession({ accessToken: next, refreshToken: session?.refresh_token || undefined });
       setToken(next);
+      const email = session?.user?.email || "";
+      if (email) setCommentAuthor(email.split("@")[0]);
+    });
+    supabase.auth.getSession().then(({ data }) => {
+      const email = data.session?.user?.email || "";
+      if (email) setCommentAuthor(email.split("@")[0]);
     });
     return () => {
       active = false;
       subscription?.subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(`thread_comments_${threadId}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        setComments(parsed || {});
+      }
+    } catch {
+      // ignore
+    }
+  }, [threadId]);
+
+  const saveComments = (next: Record<string, string[]>) => {
+    setComments(next);
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem(`thread_comments_${threadId}`, JSON.stringify(next));
+      } catch {
+        // ignore
+      }
+    }
+  };
+
+  const addComment = (index: number | string, text: string) => {
+    const val = text.trim();
+    if (!val) return;
+    saveComments((prev) => {
+      const next = { ...prev };
+      const key = String(index);
+      next[key] = [...(next[key] || []), `${commentAuthor}: ${val}`];
+      return next;
+    });
+  };
 
   const isValidThreadId = useMemo(() => UUID_REGEX.test(threadId), [threadId]);
 
@@ -75,9 +120,24 @@ export function ChatView() {
     enabled: isValidThreadId && !!token,
   });
 
+  useQuery({
+    queryKey: ["threads", "workspaceFlag"],
+    queryFn: () => listThreads({ limit: 100, offset: 0, order: "desc" }, token!),
+    enabled: !!token,
+    onSuccess: (threads) => {
+      const found = (threads || []).find((t: any) => t.id === threadId);
+      if (found && found.is_workspace) setIsWorkspace(true);
+    },
+  });
+
   useEffect(() => {
     if (data?.messages) {
-      setMessages(data.messages);
+      setMessages(
+        data.messages.map((m, i) => ({
+          ...m,
+          index: (m as any).index ?? i,
+        })),
+      );
     }
   }, [data?.messages]);
 
@@ -257,7 +317,7 @@ export function ChatView() {
   }
 
   return (
-    <div className="flex h-full flex-col gap-4">
+    <div className={`flex h-full flex-col gap-4 ${isWorkspace ? "bg-indigo-50 p-2 rounded-2xl" : ""}`}>
       <header className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -305,26 +365,56 @@ export function ChatView() {
         />
       </header>
 
-      <div className="flex-1 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="space-y-4">
-          {messages.map((m, idx) => (
-            <div
-              key={idx}
-              id={`msg-${idx}`}
-              className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
-            >
+      <div className="w-full max-w-4xl">
+        <div
+          className={`aspect-square max-h-[75vh] overflow-y-auto rounded-2xl border p-4 shadow-sm ${
+            isWorkspace ? "border-indigo-200 bg-indigo-50" : "border-slate-200 bg-white"
+          }`}
+        >
+          <div className="space-y-4">
+            {messages.map((m, idx) => (
               <div
-                className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm shadow-sm ${
-                  m.role === "user"
-                    ? "bg-blue-600 text-white"
-                    : "bg-slate-100 text-slate-900"
-                } ${highlighted === idx ? "ring-2 ring-amber-400" : ""}`}
+                key={idx}
+                id={`msg-${idx}`}
+                className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
               >
-                <div className="text-[11px] uppercase tracking-wide opacity-70">{m.role}</div>
-                <div className="mt-1 whitespace-pre-wrap leading-relaxed">{m.content}</div>
+                <div
+                  className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm shadow-sm ${
+                    m.role === "user" ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-900"
+                  } ${highlighted === idx ? "ring-2 ring-amber-400" : ""}`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-[11px] uppercase tracking-wide opacity-70">
+                      {isWorkspace ? (m.role === "user" ? "Workspace User" : "Workspace Assistant") : m.role}
+                    </div>
+                    {isWorkspace && (
+                      <span className="text-[10px] rounded-full bg-white/20 px-2 py-0.5 text-white">
+                        {m.role === "user" ? `Member #${idx + 1}` : "Assistant"}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-1 whitespace-pre-wrap leading-relaxed">{m.content}</div>
+                  {m.role === "assistant" && (
+                    <div className="mt-2 space-y-2">
+                      <div className="space-y-1">
+                        {(comments[String((m as any).index ?? idx)] || []).map((c, ci) => (
+                          <div key={ci} className="rounded-lg bg-white/30 px-2 py-1 text-xs text-slate-900">
+                            {c}
+                          </div>
+                        ))}
+                      </div>
+                      <WorkspaceCommentInput
+                        onAdd={(text) => {
+                          const msgIndex = (m as any).index ?? idx;
+                          addComment(String(msgIndex), text);
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
 

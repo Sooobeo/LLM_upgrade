@@ -13,9 +13,11 @@ import { supabase } from "@/lib/supabaseClient";
 import { getSupabaseToken } from "@/lib/apiFetch";
 import { WorkspaceModal } from "@/components/WorkspaceModal";
 import { WorkspaceMembersModal } from "@/components/WorkspaceMembersModal";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 export default function ThreadsPage() {
   const router = useRouter();
+  const { user } = useCurrentUser({ redirectIfMissing: false });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [workspaceThreadId, setWorkspaceThreadId] = useState<string | null>(null);
@@ -64,18 +66,17 @@ export default function ThreadsPage() {
               Manage threads, start a new chat, and jump back into workspaces.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            {user?.email && (
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                {user.email}
+              </span>
+            )}
             <button
               className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-100"
               onClick={logout}
             >
               Logout
-            </button>
-            <button
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
-              onClick={() => setIsModalOpen(true)}
-            >
-              New Thread
             </button>
           </div>
         </header>

@@ -156,12 +156,39 @@ def list_threads_for_owner(
     return out
 
 # 스레드 삭제
-def delete_thread_by_id(owner_id: str, thread_id: str, access_token: str) -> int:
-    q = "&".join([
-        f"id=eq.{quote(thread_id)}",
-        f"owner_id=eq.{quote(owner_id)}",
-    ])
-    deleted = sb.rest_delete("threads", q, access_token)
+def delete_thread_by_id(user_id: str, thread_id: str, access_token: str) -> int:
+    # Load thread info
+    q_thread = "&".join(
+        [
+            f"id=eq.{quote(thread_id)}",
+            "select=id,owner_id,is_workspace",
+            "limit=1",
+        ]
+    )
+    trows = sb.rest_select("threads", q_thread, access_token)
+    if not trows:
+        return 0
+    thread = trows[0]
+    is_workspace = bool(thread.get("is_workspace"))
+    owner_id = thread.get("owner_id")
+
+    # Permission: owner OR (workspace and member)
+    if not is_workspace and owner_id != user_id:
+        return 0
+    if is_workspace and not _can_access_thread(user_id, thread_id, access_token):
+        return 0
+
+    # Delete messages and members first for cleanliness (RLS permitting)
+    try:
+        sb.rest_delete("messages", f"thread_id=eq.{quote(thread_id)}", access_token)
+    except Exception:
+        pass
+    try:
+        sb.rest_delete("thread_members", f"thread_id=eq.{quote(thread_id)}", access_token)
+    except Exception:
+        pass
+
+    deleted = sb.rest_delete("threads", f"id=eq.{quote(thread_id)}", access_token)
     return deleted
 
 # 스레드 상세 조회
@@ -173,9 +200,9 @@ def get_thread_detail(owner_id: str, thread_id: str, access_token: str) -> Dict[
         f"id=eq.{quote(thread_id)}",
         "select=" + ",".join([
             "id", "title", "created_at",
-            "messages(role,content,created_at)"
+            "messages(index,role,content,created_at)"
         ]),
-        "messages.order=created_at.asc",
+        "messages.order=index.asc",
         "limit=1",
     ])
     rows = sb.rest_select("threads", q, access_token)

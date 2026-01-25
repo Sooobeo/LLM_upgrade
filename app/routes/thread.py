@@ -103,11 +103,11 @@ def delete_thread(
     access_token: str = Depends(get_access_token),
 ):
     try:
-        owner_id = user.get("id")
-        if not owner_id:
+        current_id = user.get("id")
+        if not current_id:
             raise HTTPException(status_code=401, detail="Not authenticated")
 
-        deleted = delete_thread_by_id(owner_id, thread_id, access_token)
+        deleted = delete_thread_by_id(current_id, thread_id, access_token)
 
         if deleted == 0:
             raise HTTPException(
