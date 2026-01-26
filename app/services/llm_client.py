@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 import httpx
 
@@ -41,6 +42,46 @@ def _build_url(base: str, path: str) -> str:
     if not path.startswith("/"):
         path = "/" + path
     return base + path
+
+
+def _safe_host(url: Optional[str]) -> Optional[str]:
+    if not url:
+        return None
+    try:
+        parsed = urlparse(url)
+        return parsed.netloc or url
+    except Exception:
+        return url
+
+
+def describe_llm_config(model: Optional[str] = None) -> Dict[str, Any]:
+    primary_model = model or settings.LLM_MODEL
+    fallback_model = settings.LLM_FALLBACK_MODEL or settings.LLM_MODEL or model
+    return {
+        "mode": settings.LLM_MODE,
+        "primary": {
+            "model": primary_model,
+            "base_url": settings.LLM_PRIMARY_BASE_URL,
+            "path": settings.LLM_PRIMARY_PATH,
+            "host": _safe_host(settings.LLM_PRIMARY_BASE_URL),
+        },
+        "fallback": {
+            "model": fallback_model,
+            "base_url": settings.LLM_FALLBACK_BASE_URL,
+            "path": settings.LLM_FALLBACK_PATH,
+            "host": _safe_host(settings.LLM_FALLBACK_BASE_URL),
+            "kind": (settings.LLM_FALLBACK_KIND or "same_as_primary"),
+        },
+    }
+
+
+def validate_llm_config() -> None:
+    if not settings.LLM_PRIMARY_BASE_URL:
+        raise RuntimeError("LLM_PRIMARY_BASE_URL is not set; add it to your .env for local dev.")
+    if not settings.LLM_PRIMARY_PATH:
+        raise RuntimeError("LLM_PRIMARY_PATH is not set; add it to your .env for local dev.")
+    if not settings.LLM_MODEL:
+        raise RuntimeError("LLM_MODEL is not set; add it to your .env for local dev.")
 
 
 def _build_payload(kind: str, model: str, messages: List[Dict[str, str]]) -> Dict[str, Any]:
@@ -97,7 +138,8 @@ def _extract_assistant(kind: str, data: Dict[str, Any]) -> str:
 
 
 def _should_fallback(exc: LLMUpstreamError) -> bool:
-    return exc.status in {502, 503, 504} or exc.status is None
+    # Retry/fallback on transient errors and when a requested model is missing upstream.
+    return exc.status in {502, 503, 504} or exc.status is None or exc.code == "MODEL_NOT_AVAILABLE"
 
 
 async def _post_llm(
@@ -181,7 +223,13 @@ async def _post_llm(
         raise LLMUpstreamError(provider=provider, status=status, message=repr(exc))
 
 
-async def generate(model: str, messages: List[Dict[str, str]]) -> str:
+async def generate(model: Optional[str], messages: List[Dict[str, str]]) -> str:
+    validate_llm_config()
+
+    requested_model = model or settings.LLM_MODEL
+    if not requested_model:
+        raise RuntimeError("LLM_MODEL must be configured (env LLM_MODEL).")
+
     timeout = httpx.Timeout(
         connect=float(settings.LLM_CONNECT_TIMEOUT),
         read=float(settings.LLM_READ_TIMEOUT),
@@ -192,7 +240,7 @@ async def generate(model: str, messages: List[Dict[str, str]]) -> str:
     import uuid
     request_id = uuid.uuid4().hex
 
-    primary_payload = _build_payload("same_as_primary", model, messages)
+    primary_payload = _build_payload("same_as_primary", requested_model, messages)
     primary_error: LLMUpstreamError | None = None
 
     def should_retry(exc: LLMUpstreamError) -> bool:
@@ -229,9 +277,9 @@ async def generate(model: str, messages: List[Dict[str, str]]) -> str:
 
     fallback_kind = (settings.LLM_FALLBACK_KIND or "same_as_primary").lower()
     # Ignore requested model for fallback; always use configured fallback model
-    fallback_model = settings.LLM_FALLBACK_MODEL or model
-    if settings.APP_ENV in ("dev", "local") and fallback_model != model:
-        logger.warning("Fallback model override", extra={"requested": model, "using": fallback_model})
+    fallback_model = settings.LLM_FALLBACK_MODEL or settings.LLM_MODEL or requested_model
+    if settings.APP_ENV in ("dev", "local") and fallback_model != requested_model:
+        logger.warning("Fallback model override", extra={"requested": requested_model, "using": fallback_model})
     fallback_payload = _build_payload(fallback_kind, fallback_model, messages)
     try:
         return await _post_llm(
@@ -257,7 +305,7 @@ async def generate(model: str, messages: List[Dict[str, str]]) -> str:
 async def health_check() -> Dict[str, Any]:
     timeout = httpx.Timeout(connect=2.0, read=3.0, write=3.0, pool=3.0)
     verify_flag = settings.LLM_TLS_VERIFY
-    payload = _build_payload("same_as_primary", "health-check", [{"role": "user", "content": "ping"}])
+    payload = _build_payload("same_as_primary", settings.LLM_MODEL or "health-check", [{"role": "user", "content": "ping"}])
 
     def ok_dict(ok: bool, status: Optional[int], error: Optional[str]):
         return {"ok": ok, "status": status, "error": error}
@@ -296,4 +344,4 @@ async def health_check() -> Dict[str, Any]:
         except LLMUpstreamError as exc:
             fallback_status = ok_dict(False, exc.status, repr(exc))
 
-    return {"primary": primary_status, "fallback": fallback_status}
+    return {"primary": primary_status, "fallback": fallback_status, "config": describe_llm_config()}

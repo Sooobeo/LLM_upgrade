@@ -1,4 +1,5 @@
 from typing import Optional
+import logging
 
 import httpx
 from fastapi import FastAPI, HTTPException
@@ -15,12 +16,14 @@ app = FastAPI(
     description=settings.DESCRIPTION,
 )
 
-origins = [
+# Allow common local origins; regex catches any localhost/127.* with arbitrary port.
+CORS_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:3001",
     "http://127.0.0.1:3001",
 ]
+CORS_ORIGIN_REGEX = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
 
 
 @app.get("/")
@@ -31,11 +34,31 @@ def root():
 # CORS (adjust as needed)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=CORS_ORIGINS,
+    allow_origin_regex=CORS_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Lightweight startup confirmation (dev/local only) to verify the loaded module and CORS setup.
+if settings.APP_ENV in ("dev", "local"):
+    logging.getLogger(__name__).info(
+        "CORS middleware enabled for origins=%s regex=%s (app.main:app)", CORS_ORIGINS, CORS_ORIGIN_REGEX
+    )
+    try:
+        from app.services.llm_client import describe_llm_config
+
+        cfg = describe_llm_config()
+        logging.getLogger(__name__).info(
+            "LLM config primary host=%s model=%s fallback host=%s model=%s",
+            cfg["primary"]["host"],
+            cfg["primary"]["model"],
+            cfg["fallback"]["host"],
+            cfg["fallback"]["model"],
+        )
+    except Exception as exc:  # pragma: no cover - defensive startup diagnostics
+        logging.getLogger(__name__).warning("LLM config unavailable at startup: %s", exc)
 
 # Routers
 app.include_router(health.router)
