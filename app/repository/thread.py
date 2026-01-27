@@ -537,6 +537,10 @@ async def chat_with_llm(
 
     # 3) Call LLM server (with fallback)
     payload_messages = [{"role": m["role"], "content": m["content"]} for m in llm_messages]
+    if not any((m.get("role") or "").lower() == "system" for m in payload_messages):
+        payload_messages = [
+            {"role": "system", "content": settings.LLM_SYSTEM_PROMPT + " Never repeat the user's question; answer directly."}
+        ] + payload_messages
     if settings.CHAT_DEBUG_ASSERTS:
         if payload_messages[-1]["content"].strip() != incoming:
             from fastapi import HTTPException
@@ -563,6 +567,17 @@ async def chat_with_llm(
         model=model,
         messages=payload_messages,
     )
+    def _is_echo(text: str, user_text: str) -> bool:
+        import re
+        def norm(s: str) -> str:
+            return re.sub(r"\W+", "", (s or "").lower())
+        return norm(text) == norm(user_text) or (norm(user_text) and norm(user_text) in norm(text))
+
+    if _is_echo(assistant_content, incoming):
+        payload_messages.append(
+            {"role": "system", "content": "Do not repeat the user's question. Provide a concise answer now."}
+        )
+        assistant_content = await llm_client.generate(model=model, messages=payload_messages)
 
     assistant_row = insert_and_fetch_message(thread_id, "assistant", assistant_content, access_token)
     saved_assistant = (assistant_row.get("content") or "").strip()

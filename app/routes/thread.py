@@ -38,6 +38,15 @@ from app.core.config import settings
 router = APIRouter(prefix="/threads", tags=["threads"])
 
 
+def _is_echo(text: str, user_text: str) -> bool:
+    import re
+
+    def norm(s: str) -> str:
+        return re.sub(r"\W+", "", (s or "").lower())
+
+    return norm(text) == norm(user_text) or norm(user_text) and norm(user_text) in norm(text)
+
+
 @router.post("", response_model=ThreadCreateResp, status_code=200)
 def create_thread(
     body: ThreadCreate,
@@ -392,9 +401,22 @@ async def chat_with_thread(
             )
 
     payload_messages = [{"role": m.get("role"), "content": m.get("content")} for m in chron]
+    if not any((m.get("role") or "").lower() == "system" for m in payload_messages):
+        payload_messages = [
+            {"role": "system", "content": settings.LLM_SYSTEM_PROMPT + " Never repeat the user's question; answer directly."}
+        ] + payload_messages
 
     try:
         assistant_content = await llm_client.generate(model=model, messages=payload_messages)
+        # If the model echoed the user, retry once with a stricter instruction.
+        if _is_echo(assistant_content, incoming):
+            payload_messages.append(
+                {
+                    "role": "system",
+                    "content": "Do not repeat the user's question. Provide a concise answer now.",
+                }
+            )
+            assistant_content = await llm_client.generate(model=model, messages=payload_messages)
     except LLMUpstreamError as exc:
         raise HTTPException(
             status_code=502,

@@ -393,6 +393,12 @@ async def generate(model: Optional[str], messages: List[Dict[str, str]]) -> str:
     if not requested_model:
         raise RuntimeError("LLM_MODEL must be configured (env LLM_MODEL).")
 
+    # Ensure a system prompt to reduce echoing user input on minimal models.
+    msgs = list(messages) if messages else []
+    has_system = any((m.get("role") or "").lower() == "system" for m in msgs)
+    if not has_system:
+        msgs = [{"role": "system", "content": settings.LLM_SYSTEM_PROMPT}] + msgs
+
     timeout = httpx.Timeout(
         connect=float(settings.LLM_CONNECT_TIMEOUT),
         read=float(settings.LLM_READ_TIMEOUT),
@@ -402,7 +408,7 @@ async def generate(model: Optional[str], messages: List[Dict[str, str]]) -> str:
     verify_flag = settings.LLM_TLS_VERIFY
     request_id = uuid.uuid4().hex
 
-    primary_payload = _build_payload("same_as_primary", requested_model, messages)
+    primary_payload = _build_payload("same_as_primary", requested_model, msgs)
 
     def should_retry(exc: LLMUpstreamError) -> bool:
         # Retry on transient connectivity and on empty completions (common with stream end frames / flaky upstream)
@@ -448,7 +454,7 @@ async def generate(model: Optional[str], messages: List[Dict[str, str]]) -> str:
     if settings.APP_ENV in ("dev", "local") and fallback_model != requested_model:
         logger.warning("Fallback model override", extra={"requested": requested_model, "using": fallback_model})
 
-    fallback_payload = _build_payload(fallback_kind, fallback_model, messages)
+    fallback_payload = _build_payload(fallback_kind, fallback_model, msgs)
 
     try:
         return await _post_llm(

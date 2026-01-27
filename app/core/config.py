@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     LLM_BASE_URL: str = "https://llm.ycc.club:443"
     LLM_MODEL: str = "gemma3:270m"
     LLM_TIMEOUT_SEC: int = 30
+    LLM_SYSTEM_PROMPT: str = "You are a helpful assistant. Answer the user directly without repeating their question."
 
     # --- 쿠키/도메인 (프록시형 API 만들 때 사용) ---
     COOKIE_DOMAIN: str = "localhost"     # 예: "careon.io.kr"
