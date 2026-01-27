@@ -96,11 +96,8 @@ def _build_payload(kind: str, model: str, messages: List[Dict[str, str]]) -> Dic
     mode = (settings.LLM_MODE or "chat").lower()
 
     def to_prompt(msgs: List[Dict[str, str]]) -> str:
-        lines = [f"{m.get('role','user')}: {m.get('content','')}" for m in msgs]
         last_user = next((m for m in reversed(msgs) if m.get("role") == "user"), None)
-        if last_user:
-            lines.append(f"Answer the last user message directly: {last_user.get('content','')}")
-        return "\n".join(lines)
+        return last_user.get("content", "") if last_user else ""
 
     if kind == "ollama":
         if mode == "generate":
