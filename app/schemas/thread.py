@@ -9,7 +9,7 @@ class MessageIn(BaseModel):
 
 class ThreadCreate(BaseModel):
     title: str = Field(..., min_length=1)
-    messages: List[MessageIn] = Field(..., min_length=1)
+    messages: List[MessageIn] = Field(default_factory=list)
 
 class ThreadCreateResp(BaseModel):
     thread_id: str

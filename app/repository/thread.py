@@ -69,12 +69,19 @@ def create_thread_with_messages(owner_id: str, payload: Dict[str, Any], access_t
 
     msgs = payload.get("messages") or []
     if msgs:
-        rows = [{
-            "thread_id": thread_id,
-            "role": _normalize_role(m["role"]),
-            "content": m["content"].strip(),
-            "created_at": now,
-        } for m in msgs]
+        rows = []
+        next_index = 0
+        for m in msgs:
+            rows.append(
+                {
+                    "thread_id": thread_id,
+                    "role": _normalize_role(m["role"]),
+                    "content": m["content"].strip(),
+                    "index": next_index,
+                    "created_at": now,
+                }
+            )
+            next_index += 1
         sb.rest_insert("messages", rows, access_token=access_token)
 
     return thread_id
@@ -277,6 +284,7 @@ def add_messages_to_thread(
         return (False, 0)
 
     now = datetime.now(timezone.utc).isoformat()
+    next_index = _get_max_index(thread_id, access_token) + 1
 
     rows = []
     for m in messages:
@@ -284,12 +292,16 @@ def add_messages_to_thread(
         if not content:
             raise ValueError("Message content cannot be empty")
 
-        rows.append({
-            "thread_id": thread_id,
-            "role": _normalize_role(m.get("role", "")),
-            "content": content,
-            "created_at": now,
-        })
+        rows.append(
+            {
+                "thread_id": thread_id,
+                "role": _normalize_role(m.get("role", "")),
+                "content": content,
+                "index": next_index,
+                "created_at": now,
+            }
+        )
+        next_index += 1
 
     sb.rest_insert("messages", rows, access_token)
     return (True, len(rows))
@@ -301,6 +313,7 @@ def _get_max_index(thread_id: str, access_token: str) -> int:
         "&".join(
             [
                 f"thread_id=eq.{quote(thread_id)}",
+                "index=not.is.null",
                 "select=index",
                 "order=index.desc",
                 "limit=1",
@@ -346,6 +359,7 @@ def insert_and_fetch_message(
                 f"thread_id=eq.{quote(thread_id)}",
                 f"index=eq.{new_index}",
                 "select=index,role,content,created_at",
+                "order=created_at.desc",
                 "limit=1",
             ]
         ),
@@ -364,6 +378,7 @@ def list_recent_messages(thread_id: str, limit: int, access_token: str) -> List[
         "&".join(
             [
                 f"thread_id=eq.{quote(thread_id)}",
+                "index=not.is.null",
                 "select=index,role,content,created_at",
                 "order=index.desc",
                 f"limit={limit}",

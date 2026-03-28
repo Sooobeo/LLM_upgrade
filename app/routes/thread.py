@@ -17,6 +17,7 @@ from app.repository.thread import (
     list_thread_messages,
     list_threads_for_owner,
     insert_and_fetch_message,
+    list_recent_messages,
     list_messages_before_index,
 )
 from app.schemas.thread import (
@@ -378,8 +379,25 @@ async def chat_with_thread(
     context_limit = body.context_limit or 50
     context_limit = max(1, min(200, context_limit))
 
-    # 1) Persist incoming user message
-    user_row = insert_and_fetch_message(thread_id, "user", incoming, access_token)
+    # 1) Persist incoming user message (dedupe first-turn duplicate posts)
+    recent_desc = list_recent_messages(thread_id, 2, access_token)
+    latest = recent_desc[0] if recent_desc else None
+    latest_role = str((latest or {}).get("role") or "").lower() if latest else ""
+    latest_content = ((latest or {}).get("content") or "").strip() if latest else ""
+    has_recent_assistant = any(((m.get("role") or "").lower() == "assistant") for m in recent_desc)
+    if latest and latest_role == "user" and latest_content == incoming and not has_recent_assistant:
+        try:
+            latest_index = int(latest.get("index", 0))
+        except Exception:
+            latest_index = 0
+        user_row = {
+            "index": latest_index,
+            "role": "user",
+            "content": latest_content,
+            "created_at": latest.get("created_at") or "",
+        }
+    else:
+        user_row = insert_and_fetch_message(thread_id, "user", incoming, access_token)
 
     # 2) Build context in memory
     prior_limit = max(0, context_limit - 1)
