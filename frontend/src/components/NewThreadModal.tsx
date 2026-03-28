@@ -38,6 +38,7 @@ export function NewThreadModal({ isOpen, onClose, onCreated, token }: Props) {
   const createMutation = useMutation({
     mutationFn: async () => {
       setError(null);
+      const firstMessage = message.trim();
       if (FALLBACK_MODEL && model !== FALLBACK_MODEL) {
         setError(`현재 사용 가능한 모델은 ${FALLBACK_MODEL} 입니다.`);
         throw new Error("MODEL_NOT_AVAILABLE");
@@ -48,13 +49,10 @@ export function NewThreadModal({ isOpen, onClose, onCreated, token }: Props) {
         throw err;
       }
 
-      // Simple flow: create with first user message, then ask /chat to get assistant reply.
-      // If you ever see duplicated first messages, switch to the workaround:
-      // 1) call createThread({ title, messages: [] })
-      // 2) then call postChat with the first message
+      // Create an empty thread first, then send the first user message exactly once via /chat.
       const createResp = await createThread({
         title: title || "Untitled thread",
-        messages: [{ role: "user", content: message }],
+        messages: [],
       }, token);
 
       const threadId =
@@ -64,7 +62,7 @@ export function NewThreadModal({ isOpen, onClose, onCreated, token }: Props) {
       await postChat(
         threadId,
         {
-          content: message,
+          content: firstMessage,
           model,
           context_limit: 50,
         },
