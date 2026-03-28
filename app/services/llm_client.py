@@ -87,13 +87,18 @@ def validate_llm_config() -> None:
         raise RuntimeError("LLM_MODEL is not set; add it to your .env for local dev.")
 
 
-def _build_payload(kind: str, model: str, messages: List[Dict[str, str]]) -> Dict[str, Any]:
+def _build_payload(kind: str, model: str, messages: List[Dict[str, str]], endpoint_path: Optional[str] = None) -> Dict[str, Any]:
     """
     Adapter for upstream payloads.
     - mode chat: {"model": "...", "messages": [...], "stream": false}
     - mode generate (internal/ollama-generate-like): {"model": "...", "prompt": "...", "stream": false}
     """
     mode = (settings.LLM_MODE or "chat").lower()
+    path = (endpoint_path or "").lower()
+    if path.endswith("/generate"):
+        mode = "generate"
+    elif path.endswith("/chat"):
+        mode = "chat"
 
     def to_prompt(msgs: List[Dict[str, str]]) -> str:
         lines = [f"{m.get('role','user')}: {m.get('content','')}" for m in msgs]
@@ -408,7 +413,12 @@ async def generate(model: Optional[str], messages: List[Dict[str, str]]) -> str:
     verify_flag = settings.LLM_TLS_VERIFY
     request_id = uuid.uuid4().hex
 
-    primary_payload = _build_payload("same_as_primary", requested_model, msgs)
+    primary_payload = _build_payload(
+        "same_as_primary",
+        requested_model,
+        msgs,
+        settings.LLM_PRIMARY_PATH,
+    )
 
     def should_retry(exc: LLMUpstreamError) -> bool:
         # Retry on transient connectivity and on empty completions (common with stream end frames / flaky upstream)
@@ -454,7 +464,12 @@ async def generate(model: Optional[str], messages: List[Dict[str, str]]) -> str:
     if settings.APP_ENV in ("dev", "local") and fallback_model != requested_model:
         logger.warning("Fallback model override", extra={"requested": requested_model, "using": fallback_model})
 
-    fallback_payload = _build_payload(fallback_kind, fallback_model, msgs)
+    fallback_payload = _build_payload(
+        fallback_kind,
+        fallback_model,
+        msgs,
+        settings.LLM_FALLBACK_PATH,
+    )
 
     try:
         return await _post_llm(
@@ -487,6 +502,7 @@ async def health_check() -> Dict[str, Any]:
         "same_as_primary",
         settings.LLM_MODEL or "health-check",
         [{"role": "user", "content": "ping"}],
+        settings.LLM_PRIMARY_PATH,
     )
 
     def ok_dict(ok: bool, status: Optional[int], error: Optional[str]):
@@ -512,7 +528,12 @@ async def health_check() -> Dict[str, Any]:
     if settings.LLM_FALLBACK_BASE_URL:
         fallback_kind = (settings.LLM_FALLBACK_KIND or "same_as_primary").lower()
         fb_model = settings.LLM_FALLBACK_MODEL or "health-check"
-        fb_payload = _build_payload(fallback_kind, fb_model, [{"role": "user", "content": "ping"}])
+        fb_payload = _build_payload(
+            fallback_kind,
+            fb_model,
+            [{"role": "user", "content": "ping"}],
+            settings.LLM_FALLBACK_PATH,
+        )
 
         try:
             await _post_llm(
