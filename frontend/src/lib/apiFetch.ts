@@ -36,7 +36,7 @@ export async function getSupabaseToken(): Promise<string | null> {
 
 export async function apiFetch(
   path: string,
-  options: RequestInit & { body?: any } = {},
+  options: Omit<RequestInit, "body"> & { body?: any } = {},
   token?: string | null,
   onDebug?: (info: FetchDebug) => void,
 ) {

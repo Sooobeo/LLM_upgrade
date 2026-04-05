@@ -3,6 +3,7 @@ from typing import Dict, Any, List, Tuple
 from uuid import uuid4
 from datetime import datetime, timezone
 from urllib.parse import quote
+import requests
 
 from app.db import supabase as sb
 from app.services import llm_client
@@ -241,6 +242,121 @@ def get_thread_detail(user_id: str, thread_id: str, access_token: str):
 
 
 # 스레드별 메시지 목록 조회
+def _normalize_bookmark_row(row: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "thread_id": str(row.get("thread_id") or ""),
+        "message_index": int(row.get("message_index", 0)),
+        "created_at": row.get("created_at"),
+    }
+
+
+def _message_exists(thread_id: str, message_index: int, access_token: str) -> bool:
+    q = "&".join(
+        [
+            f"thread_id=eq.{quote(thread_id)}",
+            f"index=eq.{message_index}",
+            "select=index",
+            "limit=1",
+        ]
+    )
+    rows = sb.rest_select("messages", q, access_token)
+    return bool(rows)
+
+
+def list_thread_bookmarks(
+    owner_id: str,
+    thread_id: str,
+    access_token: str,
+) -> Tuple[bool, List[Dict[str, Any]]]:
+    if not _can_access_thread(owner_id, thread_id, access_token):
+        return (False, [])
+
+    q = "&".join(
+        [
+            f"user_id=eq.{quote(owner_id)}",
+            f"thread_id=eq.{quote(thread_id)}",
+            "select=thread_id,message_index,created_at",
+            "order=message_index.asc",
+        ]
+    )
+    rows = sb.rest_select("bookmarks", q, access_token)
+    return (True, [_normalize_bookmark_row(r) for r in rows])
+
+
+def add_thread_bookmark(
+    owner_id: str,
+    thread_id: str,
+    message_index: int,
+    access_token: str,
+) -> Tuple[bool, Dict[str, Any] | None]:
+    if not _can_access_thread(owner_id, thread_id, access_token):
+        return (False, None)
+
+    if not _message_exists(thread_id, message_index, access_token):
+        raise ValueError("Message not found for this thread")
+
+    q_existing = "&".join(
+        [
+            f"user_id=eq.{quote(owner_id)}",
+            f"thread_id=eq.{quote(thread_id)}",
+            f"message_index=eq.{message_index}",
+            "select=thread_id,message_index,created_at",
+            "limit=1",
+        ]
+    )
+    existing = sb.rest_select("bookmarks", q_existing, access_token)
+    if existing:
+        return (True, _normalize_bookmark_row(existing[0]))
+
+    try:
+        sb.rest_insert(
+            "bookmarks",
+            [
+                {
+                    "user_id": owner_id,
+                    "thread_id": thread_id,
+                    "message_index": message_index,
+                }
+            ],
+            access_token,
+        )
+    except requests.HTTPError as exc:
+        if exc.response is None or exc.response.status_code != 409:
+            raise
+
+    rows = sb.rest_select("bookmarks", q_existing, access_token)
+    if not rows:
+        return (
+            True,
+            {
+                "thread_id": thread_id,
+                "message_index": message_index,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+    return (True, _normalize_bookmark_row(rows[0]))
+
+
+def remove_thread_bookmark(
+    owner_id: str,
+    thread_id: str,
+    message_index: int,
+    access_token: str,
+) -> Tuple[bool, bool]:
+    if not _can_access_thread(owner_id, thread_id, access_token):
+        return (False, False)
+
+    q = "&".join(
+        [
+            f"user_id=eq.{quote(owner_id)}",
+            f"thread_id=eq.{quote(thread_id)}",
+            f"message_index=eq.{message_index}",
+        ]
+    )
+    deleted = sb.rest_delete("bookmarks", q, access_token)
+    return (True, deleted > 0)
+
+
 def list_thread_messages(
     owner_id: str,
     thread_id: str,

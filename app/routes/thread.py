@@ -11,18 +11,25 @@ from app.db.deps import get_access_token, get_current_user
 from app.db.supabase_users import get_user_id_by_email, get_users_by_ids
 from app.repository.thread import (
     add_messages_to_thread,
+    add_thread_bookmark,
     create_thread_with_messages,
     delete_thread_by_id,
     get_thread_detail,
     list_thread_messages,
+    list_thread_bookmarks,
     list_threads_for_owner,
     insert_and_fetch_message,
     list_recent_messages,
     list_messages_before_index,
+    remove_thread_bookmark,
 )
 from app.schemas.thread import (
     AddMessagesBody,
     AddMessagesResp,
+    BookmarkDeleteResp,
+    BookmarkIn,
+    BookmarkOut,
+    BookmarksResp,
     MessagesResp,
     ThreadCreate,
     ThreadCreateResp,
@@ -359,6 +366,94 @@ def list_thread_members(
         uid = m.get("user_id")
         m["email"] = user_map.get(uid, {}).get("email")
     return members
+
+
+@router.get("/{thread_id}/bookmarks", response_model=BookmarksResp)
+def get_thread_bookmarks(
+    thread_id: str = Path(..., min_length=10),
+    user: Dict[str, Any] = Depends(get_current_user),
+    access_token: str = Depends(get_access_token),
+):
+    try:
+        owner_id = user.get("id")
+        if not owner_id:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+
+        owned, rows = list_thread_bookmarks(owner_id, thread_id, access_token)
+        if not owned:
+            raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Thread not found"})
+        return {"bookmarks": rows}
+    except HTTPException:
+        raise
+    except requests.HTTPError as exc:
+        status_code = exc.response.status_code if exc.response is not None else None
+        code = "BOOKMARKS_TABLE_MISSING" if status_code == 404 else "BOOKMARKS_QUERY_FAILED"
+        raise HTTPException(
+            status_code=500,
+            detail={"code": code, "message": exc.response.text if exc.response is not None else str(exc)},
+        )
+    except Exception:
+        raise HTTPException(status_code=500, detail={"code": "BOOKMARKS_QUERY_FAILED", "message": "Failed to fetch bookmarks"})
+
+
+@router.post("/{thread_id}/bookmarks", response_model=BookmarkOut, status_code=200)
+def create_thread_bookmark(
+    thread_id: str = Path(..., min_length=10),
+    body: BookmarkIn = Body(...),
+    user: Dict[str, Any] = Depends(get_current_user),
+    access_token: str = Depends(get_access_token),
+):
+    try:
+        owner_id = user.get("id")
+        if not owner_id:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+
+        owned, bookmark = add_thread_bookmark(owner_id, thread_id, body.message_index, access_token)
+        if not owned:
+            raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Thread not found"})
+        return bookmark
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail={"code": "MESSAGE_NOT_FOUND", "message": str(exc)})
+    except requests.HTTPError as exc:
+        status_code = exc.response.status_code if exc.response is not None else None
+        code = "BOOKMARKS_TABLE_MISSING" if status_code == 404 else "BOOKMARKS_INSERT_FAILED"
+        raise HTTPException(
+            status_code=500,
+            detail={"code": code, "message": exc.response.text if exc.response is not None else str(exc)},
+        )
+    except Exception:
+        raise HTTPException(status_code=500, detail={"code": "BOOKMARKS_INSERT_FAILED", "message": "Failed to save bookmark"})
+
+
+@router.delete("/{thread_id}/bookmarks/{message_index}", response_model=BookmarkDeleteResp, status_code=200)
+def delete_thread_bookmark(
+    thread_id: str = Path(..., min_length=10),
+    message_index: int = Path(..., ge=0),
+    user: Dict[str, Any] = Depends(get_current_user),
+    access_token: str = Depends(get_access_token),
+):
+    try:
+        owner_id = user.get("id")
+        if not owner_id:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+
+        owned, removed = remove_thread_bookmark(owner_id, thread_id, message_index, access_token)
+        if not owned:
+            raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Thread not found"})
+        return {"ok": removed, "message_index": message_index}
+    except HTTPException:
+        raise
+    except requests.HTTPError as exc:
+        status_code = exc.response.status_code if exc.response is not None else None
+        code = "BOOKMARKS_TABLE_MISSING" if status_code == 404 else "BOOKMARKS_DELETE_FAILED"
+        raise HTTPException(
+            status_code=500,
+            detail={"code": code, "message": exc.response.text if exc.response is not None else str(exc)},
+        )
+    except Exception:
+        raise HTTPException(status_code=500, detail={"code": "BOOKMARKS_DELETE_FAILED", "message": "Failed to delete bookmark"})
 
 
 @router.post("/{thread_id}/chat", response_model=ChatResponse, status_code=200)

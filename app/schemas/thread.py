@@ -26,6 +26,7 @@ class ThreadsListResp(BaseModel):
     threads: List[ThreadSummary]
 
 class MessageOut(BaseModel):
+    index: Optional[int] = None
     role: Literal["user", "assistant"]
     content: str
     created_at: str
@@ -79,3 +80,22 @@ class ChatRequest(ChatBody):
 
 class ChatResponse(ChatResp):
     pass
+
+
+class BookmarkIn(BaseModel):
+    message_index: int = Field(..., ge=0)
+
+
+class BookmarkOut(BaseModel):
+    thread_id: str
+    message_index: int
+    created_at: Optional[str] = None
+
+
+class BookmarksResp(BaseModel):
+    bookmarks: List[BookmarkOut]
+
+
+class BookmarkDeleteResp(BaseModel):
+    ok: bool
+    message_index: int

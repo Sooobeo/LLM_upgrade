@@ -35,20 +35,37 @@ async function getAccessToken(): Promise<string | null> {
   return token;
 }
 
-function extractErrorMessage(payload: any, fallback: string) {
+function extractErrorMessage(payload: unknown, fallback: string): string {
   if (!payload) return fallback;
   if (typeof payload === "string") return payload;
-  if (Array.isArray(payload)) return payload.map((p) => extractErrorMessage(p, "")).filter(Boolean).join("; ");
+  if (Array.isArray(payload)) {
+    return payload
+      .map((p) => extractErrorMessage(p, ""))
+      .filter(Boolean)
+      .join("; ");
+  }
   if (typeof payload === "object") {
+    const obj = payload as Record<string, unknown>;
+    const direct =
+      obj.detail ??
+      obj.message ??
+      obj.error ??
+      obj.msg ??
+      obj.title;
+    if (typeof direct === "string" && direct.trim()) {
+      return direct;
+    }
+    if (direct != null) {
+      try {
+        return JSON.stringify(direct);
+      } catch {
+        return fallback;
+      }
+    }
     return (
-      payload.detail ||
-      payload.message ||
-      payload.error ||
-      payload.msg ||
-      payload.title ||
       (() => {
         try {
-          return JSON.stringify(payload);
+          return JSON.stringify(obj);
         } catch {
           return fallback;
         }

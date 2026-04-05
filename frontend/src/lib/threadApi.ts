@@ -10,6 +10,8 @@ export type ThreadSummary = {
 };
 
 export type ChatMessage = {
+  id?: string;
+  index?: number;
   role: "user" | "assistant" | "system" | string;
   content: string;
   created_at?: string;
@@ -35,6 +37,12 @@ export type ChatResponse = {
   assistant_content: string;
   assistant_index: number;
   status: string;
+};
+
+export type ThreadBookmark = {
+  thread_id: string;
+  message_index: number;
+  created_at?: string;
 };
 
 export async function listThreads(
@@ -124,4 +132,35 @@ export async function setWorkspace(
     token,
     onDebug,
   );
+}
+
+export async function listThreadBookmarks(threadId: string, token: string, onDebug?: (info: FetchDebug) => void): Promise<ThreadBookmark[]> {
+  const data = await apiFetch(`/threads/${threadId}/bookmarks`, { method: "GET" }, token, onDebug);
+  return Array.isArray(data) ? data : data?.bookmarks || [];
+}
+
+export async function addThreadBookmark(
+  threadId: string,
+  messageIndex: number,
+  token: string,
+  onDebug?: (info: FetchDebug) => void,
+): Promise<ThreadBookmark> {
+  return apiFetch(
+    `/threads/${threadId}/bookmarks`,
+    {
+      method: "POST",
+      body: { message_index: messageIndex },
+    },
+    token,
+    onDebug,
+  );
+}
+
+export async function removeThreadBookmark(
+  threadId: string,
+  messageIndex: number,
+  token: string,
+  onDebug?: (info: FetchDebug) => void,
+) {
+  return apiFetch(`/threads/${threadId}/bookmarks/${messageIndex}`, { method: "DELETE" }, token, onDebug);
 }
