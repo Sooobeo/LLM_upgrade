@@ -8,7 +8,7 @@ from fastapi.openapi.utils import get_openapi
 from pydantic import BaseModel
 
 from app.core.config import settings
-from app.routes import auth, health, thread, user, debug
+from app.routes import auth, comment, health, thread, user, debug
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -66,6 +66,7 @@ app.include_router(thread.router)
 app.include_router(auth.router)
 app.include_router(user.router)
 app.include_router(debug.router)
+app.include_router(comment.router)
 
 
 # ==============================

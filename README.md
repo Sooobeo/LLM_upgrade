@@ -150,3 +150,5 @@ LLM_REQUEST_TIMEOUT_SECS=60
 # FE 실행 전에 반드시 백엔드 먼저 실행
 uvicorn app.main:app --reload
 ```
+
+
