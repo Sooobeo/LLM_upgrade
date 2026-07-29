@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # LLM Upgrade
 
 FastAPI + Supabase 백엔드와 Next.js 프론트엔드로 구성된 대화 기록 및
@@ -89,3 +90,6 @@ API 키에는 `NEXT_PUBLIC_` 접두사를 붙이지 마세요. 프론트엔드 �
 선택 목록에는 `gemini-2.5-flash`가 표시됩니다. Google은 신규 API 키에
 2.5 Flash 제공을 종료했으므로 실제 요청은 `GEMINI_2_5_COMPAT_MODEL`에
 설정된 최신 호환 모델로 실행됩니다.
+=======
+
+>>>>>>> ababa4b71edbbbfde7706f291ec75b693c092180
