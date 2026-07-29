@@ -16,7 +16,7 @@ type ExtensionFile = {
 
 export default function MyPage() {
   const router = useRouter();
-  const { user, loading: userLoading } = useCurrentUser({ redirectIfMissing: true });
+  const { loading: userLoading } = useCurrentUser({ redirectIfMissing: true });
   const [files, setFiles] = useState<ExtensionFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

@@ -14,6 +14,7 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!supabase) return;
     supabase.auth.getSession().then(({ data }) => {
       const token = data.session?.access_token;
       if (token) {
@@ -26,6 +27,10 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (!supabase) {
+      setError("Supabase 환경변수가 설정되지 않았습니다. .env.local을 확인하세요.");
+      return;
+    }
     setLoading(true);
     const { data, error: err } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);

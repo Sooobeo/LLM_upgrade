@@ -1,202 +1,41 @@
-# ========================================
-# Python / FastAPI / Alembic .gitignore
-# For projects using requirements.txt
-# ========================================
-
-# ---- Python 기본 ----
+# Python
 __pycache__/
 *.py[cod]
-*$py.class
-
-# ---- 가상환경 ----
-.env
-.venv
-env/
+.venv/
 venv/
-ENV/
-env.bak/
-venv.bak/
-
-# ---- 패키징 / 배포 ----
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# ---- 로그 / 캐시 ----
-*.log
-*.tmp
-*.bak
-*.swp
-*.swo
-.cache/
 .pytest_cache/
-.coverage
-htmlcov/
-coverage.xml
-nosetests.xml
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
 
-# ---- IDE / 편집기 ----
-.vscode/
-.idea/
-*.sublime-project
-*.sublime-workspace
-
-# ---- 데이터베이스 ----
-*.db
-*.sqlite3
-*.sqlite3-journal
-
-# ---- FastAPI ----
-# Static & upload 폴더 (있다면)
-static/
-media/
-uploads/
-
-# Uvicorn log
-uvicorn.log
-
-# ---- Alembic ----
-alembic/versions/__pycache__/
-alembic/versions/*.pyc
-# 마이그레이션 파일 버전 관리 원하면 아래 주석 해제
-# alembic/versions/
-
-# ---- Docker ----
-docker-compose.override.yml
-*.pid
-*.tar
-*.log
-*.bak
-.docker/
-.dockerignore
-
-# ---- 환경 변수 파일 ----
+# Environment and secrets
 .env
 .env.*
-!env.example
-!.env.sample
+!.env.example
+!frontend/.env.example
 
-# ---- Jupyter / 노트북 ----
-.ipynb_checkpoints/
-*.ipynb
+# JavaScript / Next.js
+node_modules/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/coverage/
+*.tsbuildinfo
+next-env.d.ts
 
-# ---- OS 별 불필요한 파일 ----
+# Logs and editor/OS files
+*.log
+.vscode/
+.idea/
 .DS_Store
 Thumbs.db
-ehthumbs.db
-desktop.ini
 
-# ---- MyPy / Ruff / Linter ----
-.mypy_cache/
-.dmypy.json
-.ruff_cache/
-.pyre/
-.pytype/
-__pypackages__/
-
-# ---- Docs ----
-docs/_build/
-site/
-
-# ---- PyInstaller ----
-*.spec
-*.manifest
-
-# ---- 기타 ----
+# Local data and credentials
+*.db
+*.sqlite3
 *.pem
 *.key
 *.crt
-*.pfx
-*.bak
-*.orig
-=======
->>>>>>> d23033a (Initial commit)
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
-/node_modules
-/.pnp
-.pnp.js
-
-# testing
-/coverage
-
-# next.js
-/.next/
-/out/
-
-# production
-/build
-
-# misc
-.DS_Store
-*.pem
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# local env files
-.env*.local
-.env
-
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-=======
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
-/node_modules
-/.pnp
-.pnp.js
-
-# testing
-/coverage
-
-# next.js
-/.next/
-/out/
-
-# production
-/build
-
-# misc
-.DS_Store
-*.pem
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# local env files
-.env*.local
-.env
-
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-
-!frontend/src/lib/
+uploads/

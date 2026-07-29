@@ -1,15 +1,26 @@
 from __future__ import annotations
-import os
+
 from enum import Enum
-from pydantic_settings import BaseSettings
-from pydantic import Field, field_validator
+
+from pydantic import AliasChoices, Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
 
 class AppEnv(str, Enum):
     local = "local"
-    dev   = "dev"
-    prod  = "prod"
+    dev = "dev"
+    prod = "prod"
+
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        # 로컬 개발에서는 프론트와 동일한 Supabase 공개 설정을 재사용합니다.
+        # 실제 환경변수는 두 파일보다 항상 우선합니다.
+        env_file=(".env", "frontend/.env.local"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
     # --- 프로젝트 메타 ---
     PROJECT_NAME: str = "GPT Conversation History Log Server"
     PROJECT_VERSION: str = "0.1.0"
@@ -33,12 +44,15 @@ class Settings(BaseSettings):
     LLM_MAX_RETRIES: int = 2
     CHAT_DEBUG_ASSERTS: bool = False
     LLM_MODE: str = "chat"  # "chat" | "generate"
-    APP_ENV: AppEnv = Field(default=AppEnv.local)
 
     # --- Supabase ---
-    SUPABASE_URL: str
+    SUPABASE_URL: str = Field(
+        validation_alias=AliasChoices("SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL"),
+    )
     # A 모드에서 필수 (클라이언트 토큰 전달 + anon 키)
-    SUPABASE_ANON_KEY: str
+    SUPABASE_ANON_KEY: str = Field(
+        validation_alias=AliasChoices("SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_ANON_KEY"),
+    )
 
     # (선택) 서버에서 service_role도 쓸 일이 있을 때만 세팅
     SUPABASE_SERVICE_ROLE_KEY: str | None = None
@@ -53,8 +67,16 @@ class Settings(BaseSettings):
     LLM_TIMEOUT_SEC: int = 30
     LLM_SYSTEM_PROMPT: str = "You are a helpful assistant. Answer the user directly without repeating their question."
 
+    # --- Google Gemini ---
+    GEMINI_API_KEY: str | None = None
+    GEMINI_MODEL: str = "gemini-2.5-flash"
+    # Google이 신규 키에 2.5 Flash 제공을 종료하여 호환 실행에 사용합니다.
+    GEMINI_2_5_COMPAT_MODEL: str = "gemini-3.6-flash"
+    GEMINI_TIMEOUT_SECS: float = 120.0
+
     # --- 쿠키/도메인 (프록시형 API 만들 때 사용) ---
-    COOKIE_DOMAIN: str = "localhost"     # 예: "careon.io.kr"
+    # 비워 두면 host-only 쿠키가 되어 localhost에서도 정상 동작합니다.
+    COOKIE_DOMAIN: str | None = None     # 배포 시 예: ".careon.io.kr"
     COOKIE_NAME: str = "sb-access"       # 프록시에서 access_token을 쿠키로 줄 때(선택)
     REFRESH_COOKIE_NAME: str = "sb-refresh"
 
@@ -73,9 +95,5 @@ class Settings(BaseSettings):
     @classmethod
     def _strip_url(cls, v: str) -> str:
         return v.rstrip("/")
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
 
 settings = Settings()

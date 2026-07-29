@@ -1,11 +1,13 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
 type Props = {
   isOpen: boolean;
   title?: string;
   description?: string;
   onCancel: () => void;
-  onConfirm: () => void;
+  onConfirm: () => void | Promise<void>;
 };
 
 export function DeleteConfirmModal({
@@ -15,7 +17,24 @@ export function DeleteConfirmModal({
   onCancel,
   onConfirm,
 }: Props) {
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) setIsDeleting(false);
+  }, [isOpen]);
+
   if (!isOpen) return null;
+
+  const handleConfirm = async () => {
+    setIsDeleting(true);
+    try {
+      await onConfirm();
+    } catch {
+      // The caller presents the error; keep the confirmation modal open.
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur">
@@ -26,15 +45,23 @@ export function DeleteConfirmModal({
         <div className="mt-6 flex justify-end gap-2">
           <button
             onClick={onCancel}
+            disabled={isDeleting}
             className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100"
           >
             취소
           </button>
           <button
-            onClick={onConfirm}
-            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-700"
+            onClick={handleConfirm}
+            disabled={isDeleting}
+            className="inline-flex min-w-24 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-700 disabled:cursor-wait disabled:opacity-70"
           >
-            확인
+            {isDeleting && (
+              <span
+                aria-hidden="true"
+                className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"
+              />
+            )}
+            {isDeleting ? "삭제 중..." : "확인"}
           </button>
         </div>
       </div>

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List
+import logging
 import requests
 from urllib.parse import quote
 
@@ -10,6 +11,9 @@ from app.db import supabase as sb
 from app.db.deps import get_access_token, get_current_user
 from app.db.supabase_users import get_user_id_by_email, get_users_by_ids
 from app.repository.thread import (
+    BranchForbiddenError,
+    BranchModelError,
+    BranchNotFoundError,
     add_messages_to_thread,
     add_thread_bookmark,
     create_thread_with_messages,
@@ -21,7 +25,11 @@ from app.repository.thread import (
     insert_and_fetch_message,
     list_recent_messages,
     list_messages_before_index,
+    list_branch_trees,
+    create_thread_branch,
+    remember_thread_model,
     remove_thread_bookmark,
+    update_thread_title,
 )
 from app.schemas.thread import (
     AddMessagesBody,
@@ -30,10 +38,15 @@ from app.schemas.thread import (
     BookmarkIn,
     BookmarkOut,
     BookmarksResp,
+    BranchCreate,
+    BranchCreateResp,
+    BranchesResp,
     MessagesResp,
     ThreadCreate,
     ThreadCreateResp,
     ThreadDetailResp,
+    ThreadTitleUpdate,
+    ThreadTitleUpdateResp,
     ThreadsListResp,
     ChatRequest,
     ChatResponse,
@@ -44,6 +57,7 @@ from app.services.llm_client import LLMUpstreamError
 from app.core.config import settings
 
 router = APIRouter(prefix="/threads", tags=["threads"])
+logger = logging.getLogger(__name__)
 
 
 def _is_echo(text: str, user_text: str) -> bool:
@@ -108,6 +122,23 @@ def get_threads(
         )
 
 
+@router.get("/branches", response_model=BranchesResp)
+def get_branch_trees(
+    user: Dict[str, Any] = Depends(get_current_user),
+    access_token: str = Depends(get_access_token),
+):
+    owner_id = user.get("id")
+    if not owner_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        return {"roots": list_branch_trees(owner_id, access_token)}
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "BRANCH_TREE_FETCH_FAILED", "message": "Failed to fetch branch trees"},
+        )
+
+
 @router.delete("/{thread_id}")
 def delete_thread(
     thread_id: str = Path(..., min_length=10),
@@ -135,6 +166,77 @@ def delete_thread(
         raise HTTPException(
             status_code=500,
             detail={"code": "DB_DELETE_FAILED", "message": "Failed to delete thread"},
+        )
+
+
+@router.patch("/{thread_id}", response_model=ThreadTitleUpdateResp)
+def rename_thread(
+    body: ThreadTitleUpdate,
+    thread_id: str = Path(..., min_length=10),
+    user: Dict[str, Any] = Depends(get_current_user),
+    access_token: str = Depends(get_access_token),
+):
+    owner_id = user.get("id")
+    if not owner_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    try:
+        title = update_thread_title(owner_id, thread_id, body.title, access_token)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "INVALID_TITLE", "message": str(exc)},
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "DB_UPDATE_FAILED", "message": "Failed to update thread title"},
+        )
+
+    if title is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "NOT_FOUND", "message": "Thread not found"},
+        )
+    return {"thread_id": thread_id, "title": title, "status": "saved"}
+
+
+@router.post("/{thread_id}/branch", response_model=BranchCreateResp, status_code=200)
+async def create_branch(
+    thread_id: str = Path(..., min_length=10),
+    body: BranchCreate | None = Body(default=None),
+    user: Dict[str, Any] = Depends(get_current_user),
+    access_token: str = Depends(get_access_token),
+):
+    owner_id = user.get("id")
+    if not owner_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        return await create_thread_branch(
+            owner_id=owner_id,
+            parent_thread_id=thread_id,
+            access_token=access_token,
+            requested_model=body.model if body else None,
+        )
+    except BranchNotFoundError:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "NOT_FOUND", "message": "Thread not found"},
+        )
+    except BranchForbiddenError:
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "BRANCH_FORBIDDEN", "message": "Only the thread owner can create a branch"},
+        )
+    except BranchModelError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "GEMINI_BRANCH_ONLY", "message": str(exc)},
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "BRANCH_CREATE_FAILED", "message": "Failed to create branch"},
         )
 
 
@@ -473,6 +575,19 @@ async def chat_with_thread(
     model = body.model or settings.LLM_MODEL
     context_limit = body.context_limit or 50
     context_limit = max(1, min(200, context_limit))
+
+    # Store only Gemini model identity in the schema-compatible hidden marker.
+    # The marker is excluded from all chat/message queries.
+    if model.lower().startswith("gemini-"):
+        try:
+            remember_thread_model(owner_id, thread_id, model, access_token)
+        except Exception as exc:
+            # Metadata is an enhancement; never block the actual chat if a
+            # deployed database has an unexpected legacy constraint.
+            logger.warning(
+                "Failed to persist Gemini thread metadata",
+                extra={"thread_id": thread_id, "error": str(exc)},
+            )
 
     # 1) Persist incoming user message (dedupe first-turn duplicate posts)
     recent_desc = list_recent_messages(thread_id, 2, access_token)

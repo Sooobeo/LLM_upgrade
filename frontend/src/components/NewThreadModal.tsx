@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { createThread, postChat } from "@/lib/threadApi";
+import { MODEL_OPTIONS } from "@/lib/models";
+import { setModel as persistThreadModel } from "@/lib/modelStore";
 
-const MODEL_OPTIONS = ["gemma3:270m", "llama3.1:8b", "mistral:7b"];
-const FALLBACK_MODEL = process.env.NEXT_PUBLIC_FALLBACK_MODEL;
 
 type Props = {
   isOpen: boolean;
@@ -39,10 +39,6 @@ export function NewThreadModal({ isOpen, onClose, onCreated, token }: Props) {
     mutationFn: async () => {
       setError(null);
       const firstMessage = message.trim();
-      if (FALLBACK_MODEL && model !== FALLBACK_MODEL) {
-        setError(`현재 사용 가능한 모델은 ${FALLBACK_MODEL} 입니다.`);
-        throw new Error("MODEL_NOT_AVAILABLE");
-      }
       if (!token) {
         const err: any = new Error("Not logged in");
         err.code = "NO_TOKEN";
@@ -58,6 +54,8 @@ export function NewThreadModal({ isOpen, onClose, onCreated, token }: Props) {
       const threadId =
         createResp?.thread_id || createResp?.id || createResp?.threadId;
       if (!threadId) throw new Error("thread_id not returned");
+
+      persistThreadModel(threadId, model);
 
       await postChat(
         threadId,
@@ -203,6 +201,12 @@ export function NewThreadModal({ isOpen, onClose, onCreated, token }: Props) {
                     </button>
                   ))}
                 </div>
+                {model === "gemini-2.5-flash" && (
+                  <p className="mt-2 text-xs leading-5 text-amber-700">
+                    Google이 신규 API 키에 2.5 Flash 제공을 종료하여 실제 요청은
+                    최신 Flash 호환 모델로 실행됩니다.
+                  </p>
+                )}
               </div>
 
               {error && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div>}

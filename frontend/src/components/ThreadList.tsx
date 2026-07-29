@@ -1,145 +1,281 @@
 "use client";
 
-import { ThreadSummary } from "@/lib/threadApi";
+import {
+  BriefcaseBusiness,
+  Check,
+  MessageSquare,
+  Pencil,
+  Trash2,
+  Users,
+  X,
+} from "lucide-react";
 import { useState } from "react";
+
+import { ThreadSummary } from "@/lib/threadApi";
 import { DeleteConfirmModal } from "./DeleteConfirmModal";
 
 type Props = {
   threads: ThreadSummary[];
   isLoading?: boolean;
   onSelect: (threadId: string) => void;
-  onNew: () => void;
-  onDelete?: (threadId: string) => void;
+  onDelete?: (threadId: string) => void | Promise<void>;
+  onRename?: (threadId: string, title: string) => void | Promise<void>;
   onWorkspace?: (thread: ThreadSummary) => void;
-  onMembers?: (threadId: string) => void;
 };
 
-export function ThreadList({ threads, isLoading, onSelect, onNew, onDelete, onWorkspace, onMembers }: Props) {
+export function ThreadList({
+  threads,
+  isLoading,
+  onSelect,
+  onDelete,
+  onRename,
+  onWorkspace,
+}: Props) {
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
-  const [loadingWorkspaceId, setLoadingWorkspaceId] = useState<string | null>(null);
-  
+  const [loadingWorkspaceId, setLoadingWorkspaceId] = useState<string | null>(
+    null,
+  );
+  const [editingThreadId, setEditingThreadId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
+  const [renamingThreadId, setRenamingThreadId] = useState<string | null>(null);
+  const [renameError, setRenameError] = useState<string | null>(null);
+
+  const startRename = (thread: ThreadSummary) => {
+    setEditingThreadId(thread.id);
+    setEditingTitle(thread.title || "");
+    setRenameError(null);
+  };
+
+  const cancelRename = () => {
+    if (renamingThreadId) return;
+    setEditingThreadId(null);
+    setEditingTitle("");
+    setRenameError(null);
+  };
+
+  const commitRename = async (threadId: string) => {
+    const title = editingTitle.trim();
+    if (!title) {
+      setRenameError("스레드 이름을 입력하세요.");
+      return;
+    }
+    setRenamingThreadId(threadId);
+    setRenameError(null);
+    try {
+      await onRename?.(threadId, title);
+      setEditingThreadId(null);
+      setEditingTitle("");
+    } catch (error) {
+      setRenameError(
+        error instanceof Error ? error.message : "이름을 수정하지 못했습니다.",
+      );
+    } finally {
+      setRenamingThreadId(null);
+    }
+  };
+
+  const heading = (
+    <div className="flex items-center gap-2">
+      <MessageSquare size={18} className="text-cyan-200" />
+      <h2 className="text-lg font-semibold text-white/90">Recent threads</h2>
+      <span className="rounded-full bg-cyan-300/10 px-2 py-0.5 text-xs font-semibold text-cyan-100">
+        {threads.length}
+      </span>
+    </div>
+  );
+
   if (isLoading) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-white px-4 py-6 text-sm text-slate-600 shadow-sm">
-        불러오는 중...
-      </div>
+      <section className="space-y-3">
+        {heading}
+        <div className="rounded-2xl border border-white/10 bg-slate-950/35 px-4 py-6 text-sm text-blue-100 shadow-sm">
+          불러오는 중...
+        </div>
+      </section>
     );
   }
 
   if (!threads.length) {
     return (
-      <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-8 text-center shadow-sm">
-        <p className="text-sm text-slate-600">아직 스레드가 없습니다.</p>
-        <button
-          className="mt-3 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
-          onClick={onNew}
-        >
-          새 스레드 만들기
-        </button>
-      </div>
+      <section className="space-y-3">
+        {heading}
+        <div
+          aria-label="일반 스레드 없음"
+          className="min-h-24 rounded-2xl border border-dashed border-white/10 bg-slate-950/20"
+        />
+      </section>
     );
   }
 
   return (
     <>
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900 text-white/90">Recent threads</h2>
-        </div>
+      <section className="space-y-3">
+        {heading}
+
         <div className="grid gap-3 sm:grid-cols-2">
-          {threads.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => onSelect(t.id)}
-              className="group flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-1 hover:border-blue-200 hover:shadow-md"
-            >
-              <div className="flex items-center gap-2">
-            {/* Title */}
-            <h3 className="flex-1 min-w-0 text-base font-semibold text-slate-900 line-clamp-1">
-              {t.title || "Untitled"}
-            </h3>
-
-            {/* Workspace badge */}
-            {t.is_workspace && (
-              <span className="shrink-0 rounded-full bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-700">
-                Workspace
-              </span>
-            )}
-
-            {/* Actions */}
-            {onWorkspace && (
-              <button
-                type="button"
-                disabled={loadingWorkspaceId === t.id}
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  setLoadingWorkspaceId(t.id);
-                  try {
-                    await onWorkspace(t); // ← 비동기라고 가정
-                  } finally {
-                    setLoadingWorkspaceId(null);
-                  }
-                }}
-                className={`shrink-0 rounded-full border px-2 py-1 text-[11px] font-semibold
-                  ${
-                    loadingWorkspaceId === t.id
-                      ? "cursor-not-allowed border-blue-200 bg-blue-100 text-blue-600"
-                      : "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
-                  }
-                `}
+          {threads.map((thread) => {
+            const isEditing = editingThreadId === thread.id;
+            const isRenaming = renamingThreadId === thread.id;
+            return (
+              <article
+                key={thread.id}
+                className="flex min-h-40 flex-col rounded-2xl border border-white/10 bg-slate-950/35 p-4 shadow-lg transition hover:-translate-y-0.5 hover:border-cyan-300/35 hover:bg-slate-950/50"
               >
-                {loadingWorkspaceId === t.id ? (
-                  <span className="flex items-center gap-1">
-                    <span className="h-3 w-3 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
-                    Setting...
-                  </span>
-                ) : (
-                  "Set workspace"
-                )}
-              </button>
-            )}
+                <div className="flex items-start gap-3">
+                  <div
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+                      thread.is_workspace
+                        ? "bg-indigo-300/15 text-indigo-200"
+                        : "bg-cyan-300/10 text-cyan-200"
+                    }`}
+                  >
+                    {thread.is_workspace ? (
+                      <BriefcaseBusiness size={18} />
+                    ) : (
+                      <MessageSquare size={17} />
+                    )}
+                  </div>
 
-            {onDelete && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setDeleteTargetId(t.id);
-                }}
-                className="shrink-0 rounded-full border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-100"
-              >
-                삭제
-              </button>
-            )}
-          </div>
+                  <div className="min-w-0 flex-1">
+                    {isEditing ? (
+                      <div>
+                        <div className="flex items-center gap-1">
+                          <input
+                            autoFocus
+                            value={editingTitle}
+                            maxLength={200}
+                            disabled={isRenaming}
+                            onChange={(event) =>
+                              setEditingTitle(event.target.value)
+                            }
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                void commitRename(thread.id);
+                              } else if (event.key === "Escape") {
+                                cancelRename();
+                              }
+                            }}
+                            aria-label="스레드 이름"
+                            className="min-w-0 flex-1 rounded-lg border border-cyan-300/30 bg-white/5 px-2 py-1 text-sm font-semibold text-white outline-none focus:ring-2 focus:ring-cyan-300/40"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => void commitRename(thread.id)}
+                            disabled={isRenaming}
+                            aria-label="이름 저장"
+                            className="rounded-md p-1.5 text-emerald-300 hover:bg-emerald-300/10 disabled:opacity-50"
+                          >
+                            {isRenaming ? (
+                              <span className="block h-4 w-4 animate-spin rounded-full border-2 border-emerald-300 border-t-transparent" />
+                            ) : (
+                              <Check size={16} />
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={cancelRename}
+                            disabled={isRenaming}
+                            aria-label="이름 수정 취소"
+                            className="rounded-md p-1.5 text-white/45 hover:bg-white/10 disabled:opacity-50"
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                        {renameError && (
+                          <p className="mt-1 text-xs font-medium text-red-300">
+                            {renameError}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <h3 className="line-clamp-2 text-sm font-semibold leading-5 text-white">
+                        {thread.title || "Untitled"}
+                      </h3>
+                    )}
+                  </div>
 
-          {/* Preview는 아래 줄 */}
-          {t.last_message_preview && (
-            <p className="mt-1 text-xs text-slate-600 line-clamp-2">
-              {t.last_message_preview}
-            </p>
-          )}
+                  {!isEditing && onRename && (
+                    <button
+                      type="button"
+                      onClick={() => startRename(thread)}
+                      aria-label={`${thread.title || "Untitled"} 이름 수정`}
+                      title="스레드 이름 수정"
+                      className="shrink-0 rounded-lg p-1.5 text-white/40 transition hover:bg-cyan-300/10 hover:text-cyan-200"
+                    >
+                      <Pencil size={15} />
+                    </button>
+                  )}
+                </div>
 
-              <div className="mt-auto flex items-center gap-3 pt-3 text-[11px] text-slate-500">
-                <span>{t.message_count ?? 0} msgs</span>
-                <span>·</span>
-                <span>{t.created_at ? new Date(t.created_at).toLocaleString() : ""}</span>
-              </div>
-            </button>
-          ))}
+                <div className="mt-3 truncate text-[10px] text-white/45">
+                  {thread.created_at
+                    ? new Date(thread.created_at).toLocaleString()
+                    : ""}
+                </div>
+
+                <div className="mt-auto pt-3">
+                  {(onWorkspace || onDelete) && (
+                    <div className="mb-2 flex items-center gap-2">
+                      {onWorkspace && (
+                        <button
+                          type="button"
+                          disabled={loadingWorkspaceId === thread.id}
+                          onClick={async () => {
+                            setLoadingWorkspaceId(thread.id);
+                            try {
+                              await onWorkspace(thread);
+                            } finally {
+                              setLoadingWorkspaceId(null);
+                            }
+                          }}
+                          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-indigo-300/15 bg-indigo-300/5 px-2 py-1.5 text-[10px] font-semibold text-indigo-100/75 transition hover:bg-indigo-300/10 disabled:opacity-50"
+                        >
+                          {loadingWorkspaceId === thread.id ? (
+                            <span className="h-3 w-3 animate-spin rounded-full border-2 border-indigo-200 border-t-transparent" />
+                          ) : (
+                            <Users size={12} />
+                          )}
+                          Set workspace
+                        </button>
+                      )}
+                      {onDelete && (
+                        <button
+                          type="button"
+                          onClick={() => setDeleteTargetId(thread.id)}
+                          className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-300/15 bg-red-300/5 px-3 py-1.5 text-[10px] font-semibold text-red-200/75 transition hover:bg-red-300/10"
+                        >
+                          <Trash2 size={12} />
+                          삭제
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => onSelect(thread.id)}
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-white/85 transition hover:border-cyan-300/30 hover:bg-cyan-300/10 hover:text-white"
+                  >
+                    Open thread
+                  </button>
+                </div>
+              </article>
+            );
+          })}
         </div>
-      </div>
-      <DeleteConfirmModal
-          isOpen={!!deleteTargetId}
-          onCancel={() => setDeleteTargetId(null)}
-          onConfirm={() => {
-            if (deleteTargetId) {
-              onDelete?.(deleteTargetId);
-            }
-            setDeleteTargetId(null);
-          }}
-        />
+      </section>
 
+      <DeleteConfirmModal
+        isOpen={Boolean(deleteTargetId)}
+        onCancel={() => setDeleteTargetId(null)}
+        onConfirm={async () => {
+          if (deleteTargetId) {
+            await onDelete?.(deleteTargetId);
+          }
+          setDeleteTargetId(null);
+        }}
+      />
     </>
   );
 }

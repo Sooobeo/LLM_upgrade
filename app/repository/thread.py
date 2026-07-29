@@ -1,8 +1,10 @@
 from __future__ import annotations
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Optional, Tuple
 from uuid import uuid4
 from datetime import datetime, timezone
 from urllib.parse import quote
+import json
+import re
 import requests
 
 from app.db import supabase as sb
@@ -11,6 +13,25 @@ from app.core.config import settings
 import logging
 
 logger = logging.getLogger(__name__)
+
+BRANCH_META_PREFIX = "__BRANCH_META__:"
+# Some deployed schemas constrain message indexes to non-negative values.
+# Reserve the maximum signed int32 value and exclude it from every public and
+# LLM-context query, avoiding a database migration.
+BRANCH_META_INDEX = 2_147_483_647
+
+
+class BranchNotFoundError(LookupError):
+    pass
+
+
+class BranchForbiddenError(PermissionError):
+    pass
+
+
+class BranchModelError(ValueError):
+    pass
+
 
 def _normalize_role(role: str) -> str:
     r = (role or "").lower().strip()
@@ -87,6 +108,458 @@ def create_thread_with_messages(owner_id: str, payload: Dict[str, Any], access_t
 
     return thread_id
 
+
+def _encode_branch_metadata(metadata: Dict[str, Any]) -> str:
+    return BRANCH_META_PREFIX + json.dumps(metadata, ensure_ascii=False, separators=(",", ":"))
+
+
+def _decode_branch_metadata(content: str) -> Optional[Dict[str, Any]]:
+    if not isinstance(content, str) or not content.startswith(BRANCH_META_PREFIX):
+        return None
+    try:
+        value = json.loads(content[len(BRANCH_META_PREFIX):])
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def _get_thread_metadata(thread_id: str, access_token: str) -> Optional[Dict[str, Any]]:
+    rows = sb.rest_select(
+        "messages",
+        "&".join(
+            [
+                f"thread_id=eq.{quote(thread_id)}",
+                f"index=eq.{BRANCH_META_INDEX}",
+                "select=content",
+                "limit=1",
+            ]
+        ),
+        access_token,
+    )
+    if not rows:
+        return None
+    return _decode_branch_metadata(rows[0].get("content") or "")
+
+
+def _persist_thread_metadata(
+    thread_id: str,
+    metadata: Dict[str, Any],
+    access_token: str,
+) -> None:
+    content = _encode_branch_metadata(metadata)
+    query = "&".join(
+        [
+            f"thread_id=eq.{quote(thread_id)}",
+            f"index=eq.{BRANCH_META_INDEX}",
+        ]
+    )
+    existing = sb.rest_select(
+        "messages",
+        query + "&select=index&limit=1",
+        access_token,
+    )
+    if existing:
+        sb.rest_update("messages", query, {"role": "assistant", "content": content}, access_token)
+        return
+
+    sb.rest_insert(
+        "messages",
+        [
+            {
+                "thread_id": thread_id,
+                "role": "assistant",
+                "content": content,
+                "index": BRANCH_META_INDEX,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+        ],
+        access_token,
+    )
+
+
+def remember_thread_model(
+    owner_id: str,
+    thread_id: str,
+    model: str,
+    access_token: str,
+) -> bool:
+    """Persist a Gemini model hint without requiring a threads schema change."""
+    if not (model or "").lower().startswith("gemini-"):
+        return False
+
+    rows = sb.rest_select(
+        "threads",
+        "&".join(
+            [
+                f"id=eq.{quote(thread_id)}",
+                f"owner_id=eq.{quote(owner_id)}",
+                "select=id",
+                "limit=1",
+            ]
+        ),
+        access_token,
+    )
+    if not rows:
+        return False
+
+    metadata = _get_thread_metadata(thread_id, access_token) or {
+        "version": 1,
+        "parent_thread_id": None,
+        "root_thread_id": thread_id,
+        "context_preview": None,
+    }
+    metadata["model"] = model
+    _persist_thread_metadata(thread_id, metadata, access_token)
+    return True
+
+
+def _context_preview(messages: List[Dict[str, Any]]) -> str:
+    source = next(
+        (
+            (row.get("content") or "").strip()
+            for row in reversed(messages)
+            if (row.get("role") or "").lower() == "assistant"
+            and (row.get("content") or "").strip()
+        ),
+        "",
+    )
+    if not source:
+        source = next(
+            (
+                (row.get("content") or "").strip()
+                for row in reversed(messages)
+                if (row.get("content") or "").strip()
+            ),
+            "",
+        )
+    return source[:20]
+
+
+def _single_sentence_summary(text: str) -> str:
+    summary = re.sub(r"\s+", " ", (text or "")).strip().strip("\"'“”")
+    if not summary:
+        return "이전 대화 내용이 없습니다."
+
+    sentence_end = re.search(r"[.!?。！？]", summary)
+    if sentence_end:
+        summary = summary[: sentence_end.end()]
+
+    # The original branch-banner contract is 20 characters maximum.
+    if len(summary) > 20:
+        summary = summary[:19].rstrip(" .!?。！？") + "…"
+    return summary
+
+
+async def _summarize_branch_context(
+    messages: List[Dict[str, Any]],
+    model: str,
+) -> str:
+    visible = [
+        {
+            "role": _normalize_role(row.get("role") or ""),
+            "content": (row.get("content") or "").strip(),
+        }
+        for row in messages[-20:]
+        if (row.get("content") or "").strip()
+    ]
+    if not visible:
+        return "이전 대화 내용이 없습니다."
+
+    transcript = "\n".join(
+        f"{row['role']}: {row['content']}" for row in visible
+    )[-6000:]
+    prompt = [
+        {
+            "role": "system",
+            "content": (
+                "이전 대화의 핵심 맥락을 한국어 한 문장으로 요약하세요. "
+                "공백과 문장부호를 포함해 20자 이내로 쓰고, 설명이나 따옴표는 붙이지 마세요."
+            ),
+        },
+        {
+            "role": "user",
+            "content": f"요약할 이전 대화:\n{transcript}",
+        },
+    ]
+    try:
+        generated = await llm_client.generate(model=model, messages=prompt)
+        return _single_sentence_summary(generated)
+    except Exception:
+        logger.exception("Failed to summarize branch context; using a local fallback")
+        return _single_sentence_summary(_context_preview(messages))
+
+
+async def create_thread_branch(
+    owner_id: str,
+    parent_thread_id: str,
+    access_token: str,
+    requested_model: Optional[str] = None,
+) -> Dict[str, Any]:
+    parent_rows = sb.rest_select(
+        "threads",
+        "&".join(
+            [
+                f"id=eq.{quote(parent_thread_id)}",
+                "select=id,title,owner_id,is_workspace",
+                "limit=1",
+            ]
+        ),
+        access_token,
+    )
+    if not parent_rows:
+        raise BranchNotFoundError("Thread not found")
+    parent = parent_rows[0]
+    if parent.get("owner_id") != owner_id:
+        raise BranchForbiddenError("Only the thread owner can create a branch")
+
+    metadata = _get_thread_metadata(parent_thread_id, access_token)
+    if (metadata or {}).get("is_deleted"):
+        raise BranchNotFoundError("Thread has been deleted")
+    stored_model = (metadata or {}).get("model")
+    model = requested_model or stored_model
+    if not model or not str(model).lower().startswith("gemini-"):
+        raise BranchModelError("Branching is available only for Gemini threads")
+    if stored_model and requested_model and stored_model != requested_model:
+        raise BranchModelError("Requested model does not match the thread model")
+
+    messages = sb.rest_select(
+        "messages",
+        "&".join(
+            [
+                f"thread_id=eq.{quote(parent_thread_id)}",
+                "index=gte.0",
+                f"index=lt.{BRANCH_META_INDEX}",
+                "select=index,role,content,created_at",
+                "order=index.asc",
+            ]
+        ),
+        access_token,
+    )
+    preview = await _summarize_branch_context(messages, str(model))
+    child_thread_id = str(uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    title = (parent.get("title") or "").strip()
+    is_workspace = bool(parent.get("is_workspace"))
+    root_thread_id = (metadata or {}).get("root_thread_id") or parent_thread_id
+
+    # Mark the original/root thread as Gemini as well. This also makes legacy
+    # Gemini threads branchable after the first explicit branch request.
+    if metadata is None:
+        _persist_thread_metadata(
+            parent_thread_id,
+            {
+                "version": 1,
+                "parent_thread_id": None,
+                "root_thread_id": root_thread_id,
+                "context_preview": None,
+                "model": model,
+            },
+            access_token,
+        )
+
+    sb.rest_insert(
+        "threads",
+        [
+            {
+                "id": child_thread_id,
+                "title": title,
+                "owner_id": owner_id,
+                "is_workspace": is_workspace,
+                "created_at": now,
+            }
+        ],
+        access_token,
+    )
+    try:
+        if is_workspace:
+            parent_members = sb.rest_select(
+                "thread_members",
+                "&".join(
+                    [
+                        f"thread_id=eq.{quote(parent_thread_id)}",
+                        "select=user_id,role",
+                    ]
+                ),
+                access_token,
+            )
+            if parent_members:
+                sb.rest_insert(
+                    "thread_members",
+                    [
+                        {
+                            "thread_id": child_thread_id,
+                            "user_id": member["user_id"],
+                            "role": member.get("role") or "member",
+                        }
+                        for member in parent_members
+                        if member.get("user_id")
+                    ],
+                    access_token,
+                )
+
+        child_metadata = {
+            "version": 1,
+            "parent_thread_id": parent_thread_id,
+            "root_thread_id": root_thread_id,
+            "context_preview": preview,
+            "model": model,
+        }
+        rows = [
+            {
+                "thread_id": child_thread_id,
+                "role": "assistant",
+                "content": _encode_branch_metadata(child_metadata),
+                "index": BRANCH_META_INDEX,
+                "created_at": now,
+            }
+        ]
+        sb.rest_insert("messages", rows, access_token)
+    except Exception:
+        # Avoid leaving an empty child if branch metadata persistence fails.
+        try:
+            sb.rest_delete("threads", f"id=eq.{quote(child_thread_id)}", access_token)
+        except Exception:
+            pass
+        raise
+
+    return {
+        "thread_id": child_thread_id,
+        "title": title,
+        "parent_thread_id": parent_thread_id,
+        "context_preview": preview,
+        "status": "saved",
+    }
+
+
+def list_branch_trees(owner_id: str, access_token: str) -> List[Dict[str, Any]]:
+    member_rows = sb.rest_select(
+        "thread_members",
+        "&".join(
+            [
+                f"user_id=eq.{quote(owner_id)}",
+                "select=thread_id",
+            ]
+        ),
+        access_token,
+    )
+    member_thread_ids = list(
+        dict.fromkeys(
+            str(row["thread_id"])
+            for row in member_rows
+            if row.get("thread_id")
+        )
+    )
+    owned_threads = sb.rest_select(
+        "threads",
+        "&".join(
+            [
+                f"owner_id=eq.{quote(owner_id)}",
+                "select=id",
+                "order=created_at.asc",
+            ]
+        ),
+        access_token,
+    )
+    accessible_ids = list(
+        dict.fromkeys(
+            [
+                *(str(row["id"]) for row in owned_threads if row.get("id")),
+                *member_thread_ids,
+            ]
+        )
+    )
+    if not accessible_ids:
+        return []
+
+    safe_accessible_ids = ",".join(quote(thread_id) for thread_id in accessible_ids)
+    threads = sb.rest_select_as_service(
+        "threads",
+        "&".join(
+            [
+                f"id=in.({safe_accessible_ids})",
+                "select=id,title,created_at,is_workspace,owner_id",
+                "order=created_at.asc",
+            ]
+        ),
+    )
+    by_id = {str(row.get("id")): row for row in threads if row.get("id")}
+    if not by_id:
+        return []
+
+    markers = sb.rest_select_as_service(
+        "messages",
+        "&".join(
+            [
+                f"thread_id=in.({safe_accessible_ids})",
+                f"index=eq.{BRANCH_META_INDEX}",
+                "select=thread_id,content",
+            ]
+        ),
+    )
+    metadata_by_id: Dict[str, Dict[str, Any]] = {}
+    for row in markers:
+        thread_id = str(row.get("thread_id") or "")
+        if thread_id not in by_id:
+            continue
+        metadata = _decode_branch_metadata(row.get("content") or "")
+        if metadata:
+            metadata_by_id[thread_id] = metadata
+
+    # A lineage exists only if at least one owned thread has a parent.
+    child_ids = {
+        thread_id
+        for thread_id, metadata in metadata_by_id.items()
+        if metadata.get("parent_thread_id")
+    }
+    if not child_ids:
+        return []
+
+    included = set(child_ids)
+    for child_id in list(child_ids):
+        current = child_id
+        seen = set()
+        while current not in seen:
+            seen.add(current)
+            parent_id = (metadata_by_id.get(current) or {}).get("parent_thread_id")
+            if not parent_id or parent_id not in by_id:
+                break
+            included.add(parent_id)
+            current = parent_id
+
+    nodes: Dict[str, Dict[str, Any]] = {}
+    for thread_id in included:
+        thread = by_id[thread_id]
+        metadata = metadata_by_id.get(thread_id) or {}
+        nodes[thread_id] = {
+            "id": thread_id,
+            "thread_id": thread_id,
+            "title": thread.get("title") or "",
+            "parent_thread_id": metadata.get("parent_thread_id"),
+            "context_preview": metadata.get("context_preview"),
+            "created_at": thread.get("created_at") or "",
+            "is_deleted": bool(metadata.get("is_deleted")),
+            "can_manage": thread.get("owner_id") == owner_id,
+            "children": [],
+        }
+
+    roots: List[Dict[str, Any]] = []
+    for thread_id, node in nodes.items():
+        parent_id = node.get("parent_thread_id")
+        if parent_id in nodes:
+            nodes[parent_id]["children"].append(node)
+        else:
+            roots.append(node)
+
+    def sort_tree(node: Dict[str, Any]) -> None:
+        node["children"].sort(key=lambda child: (child.get("created_at") or "", child["thread_id"]))
+        for child in node["children"]:
+            sort_tree(child)
+
+    roots.sort(key=lambda node: (node.get("created_at") or "", node["thread_id"]))
+    for root in roots:
+        sort_tree(root)
+    return roots
+
 # 스레드 목록 조회 (owner이거나 member인 스레드 모두)
 def list_threads_for_owner(
     owner_id: str,
@@ -135,6 +608,8 @@ def list_threads_for_owner(
         f"order=created_at.{order}",
         f"limit={limit}",
         f"offset={offset}",
+        f"messages.index=lt.{BRANCH_META_INDEX}",
+        f"last.index=lt.{BRANCH_META_INDEX}",
         "last.order=created_at.desc",
         "last.limit=1",
     ]
@@ -163,6 +638,38 @@ def list_threads_for_owner(
         })
     return out
 
+def _hard_delete_thread(thread_id: str, access_token: str) -> int:
+    """Delete one physical thread row and its directly stored children."""
+    try:
+        sb.rest_delete("messages", f"thread_id=eq.{quote(thread_id)}", access_token)
+    except Exception:
+        pass
+    try:
+        sb.rest_delete("thread_members", f"thread_id=eq.{quote(thread_id)}", access_token)
+    except Exception:
+        pass
+    return sb.rest_delete("threads", f"id=eq.{quote(thread_id)}", access_token)
+
+
+def _all_branch_metadata() -> Dict[str, Dict[str, Any]]:
+    rows = sb.rest_select_as_service(
+        "messages",
+        "&".join(
+            [
+                f"index=eq.{BRANCH_META_INDEX}",
+                "select=thread_id,content",
+            ]
+        ),
+    )
+    result: Dict[str, Dict[str, Any]] = {}
+    for row in rows:
+        thread_id = str(row.get("thread_id") or "")
+        metadata = _decode_branch_metadata(row.get("content") or "")
+        if thread_id and metadata:
+            result[thread_id] = metadata
+    return result
+
+
 # 스레드 삭제
 def delete_thread_by_id(user_id: str, thread_id: str, access_token: str) -> int:
     # Load thread info
@@ -180,24 +687,100 @@ def delete_thread_by_id(user_id: str, thread_id: str, access_token: str) -> int:
     is_workspace = bool(thread.get("is_workspace"))
     owner_id = thread.get("owner_id")
 
-    # Permission: owner OR (workspace and member)
-    if not is_workspace and owner_id != user_id:
-        return 0
-    if is_workspace and not _can_access_thread(user_id, thread_id, access_token):
+    # Deleting a thread or an entire branch lineage is owner-only.
+    if owner_id != user_id:
         return 0
 
-    # Delete messages and members first for cleanliness (RLS permitting)
-    try:
-        sb.rest_delete("messages", f"thread_id=eq.{quote(thread_id)}", access_token)
-    except Exception:
-        pass
-    try:
-        sb.rest_delete("thread_members", f"thread_id=eq.{quote(thread_id)}", access_token)
-    except Exception:
-        pass
+    metadata = _get_thread_metadata(thread_id, access_token)
+    if not metadata:
+        return _hard_delete_thread(thread_id, access_token)
 
-    deleted = sb.rest_delete("threads", f"id=eq.{quote(thread_id)}", access_token)
-    return deleted
+    metadata_by_id = _all_branch_metadata()
+    children = [
+        child_id
+        for child_id, child_metadata in metadata_by_id.items()
+        if child_metadata.get("parent_thread_id") == thread_id
+    ]
+    is_root = (
+        not metadata.get("parent_thread_id")
+        or metadata.get("root_thread_id") == thread_id
+    )
+
+    if is_root:
+        lineage_ids = {
+            candidate_id
+            for candidate_id, candidate_metadata in metadata_by_id.items()
+            if candidate_id == thread_id
+            or candidate_metadata.get("root_thread_id") == thread_id
+        }
+        lineage_ids.add(thread_id)
+        deleted = 0
+        for candidate_id in lineage_ids:
+            deleted += _hard_delete_thread(candidate_id, access_token)
+        return deleted
+
+    if children:
+        tombstone = {
+            **metadata,
+            "is_deleted": True,
+            "deleted_at": datetime.now(timezone.utc).isoformat(),
+        }
+        _persist_thread_metadata(thread_id, tombstone, access_token)
+        try:
+            sb.rest_delete(
+                "messages",
+                "&".join(
+                    [
+                        f"thread_id=eq.{quote(thread_id)}",
+                        f"index=lt.{BRANCH_META_INDEX}",
+                    ]
+                ),
+                access_token,
+            )
+        except Exception:
+            pass
+        return 1
+
+    return _hard_delete_thread(thread_id, access_token)
+
+
+def update_thread_title(
+    owner_id: str,
+    thread_id: str,
+    title: str,
+    access_token: str,
+) -> Optional[str]:
+    normalized_title = (title or "").strip()
+    if not normalized_title:
+        raise ValueError("Thread title cannot be empty")
+
+    rows = sb.rest_select(
+        "threads",
+        "&".join(
+            [
+                f"id=eq.{quote(thread_id)}",
+                f"owner_id=eq.{quote(owner_id)}",
+                "select=id",
+                "limit=1",
+            ]
+        ),
+        access_token,
+    )
+    if not rows:
+        return None
+
+    sb.rest_update(
+        "threads",
+        "&".join(
+            [
+                f"id=eq.{quote(thread_id)}",
+                f"owner_id=eq.{quote(owner_id)}",
+            ]
+        ),
+        {"title": normalized_title},
+        access_token,
+    )
+    return normalized_title
 
 
 def get_thread_detail(user_id: str, thread_id: str, access_token: str):
@@ -213,6 +796,9 @@ def get_thread_detail(user_id: str, thread_id: str, access_token: str):
         return None
 
     thread = rows[0]
+    metadata = _get_thread_metadata(thread_id, access_token) or {}
+    if metadata.get("is_deleted"):
+        return None
 
     if thread["owner_id"] != user_id:
         m = sb.rest_select(
@@ -237,6 +823,9 @@ def get_thread_detail(user_id: str, thread_id: str, access_token: str):
     )
 
     thread["messages"] = messages
+    thread["can_rename"] = thread["owner_id"] == user_id
+    thread["parent_thread_id"] = metadata.get("parent_thread_id")
+    thread["context_preview"] = metadata.get("context_preview")
     return thread
 
 
@@ -372,6 +961,8 @@ def list_thread_messages(
 
     q_msgs = "&".join([
         f"thread_id=eq.{quote(thread_id)}",
+        "index=gte.0",
+        f"index=lt.{BRANCH_META_INDEX}",
         "select=index,role,content,created_at",
         f"order=index.{order}",
         f"limit={limit}",
@@ -430,6 +1021,7 @@ def _get_max_index(thread_id: str, access_token: str) -> int:
             [
                 f"thread_id=eq.{quote(thread_id)}",
                 "index=not.is.null",
+                f"index=lt.{BRANCH_META_INDEX}",
                 "select=index",
                 "order=index.desc",
                 "limit=1",
@@ -494,7 +1086,8 @@ def list_recent_messages(thread_id: str, limit: int, access_token: str) -> List[
         "&".join(
             [
                 f"thread_id=eq.{quote(thread_id)}",
-                "index=not.is.null",
+                "index=gte.0",
+                f"index=lt.{BRANCH_META_INDEX}",
                 "select=index,role,content,created_at",
                 "order=index.desc",
                 f"limit={limit}",
@@ -514,6 +1107,8 @@ def list_messages_before_index(thread_id: str, before_index: int, limit: int, ac
         "&".join(
             [
                 f"thread_id=eq.{quote(thread_id)}",
+                "index=gte.0",
+                f"index=lt.{BRANCH_META_INDEX}",
                 f"index=lt.{before_index}",
                 "select=index,role,content,created_at",
                 "order=index.desc",
@@ -532,6 +1127,7 @@ def get_first_assistant_message(thread_id: str, access_token: str) -> Dict[str, 
             [
                 f"thread_id=eq.{quote(thread_id)}",
                 "role=eq.assistant",
+                f"index=lt.{BRANCH_META_INDEX}",
                 "select=index,role,content",
                 "order=index.asc",
                 "limit=1",
@@ -749,28 +1345,5 @@ async def chat_with_llm(
         "user_content": content,
         "assistant_content": saved_assistant,
         "assistant_index": assistant_row.get("index"),
-        "status": "saved",
-    }
-
-    assistant_index = user_index + 1
-    sb.rest_insert(
-        "messages",
-        [
-            {
-                "thread_id": thread_id,
-                "role": "assistant",
-                "content": assistant_content,
-                "index": assistant_index,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            }
-        ],
-        access_token,
-    )
-
-    return {
-        "thread_id": thread_id,
-        "user_content": content,
-        "assistant_content": assistant_content,
-        "assistant_index": assistant_index,
         "status": "saved",
     }

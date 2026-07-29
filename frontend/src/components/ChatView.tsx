@@ -2,18 +2,22 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'next/navigation';
-import { Pencil, Trash2, Check, X } from 'lucide-react';
+import { useParams, useRouter } from 'next/navigation';
+import { Pencil, Trash2, Check, X, GitBranch } from 'lucide-react';
 
 import { getModel, setModel } from '@/lib/modelStore';
+import { MODEL_OPTIONS } from '@/lib/models';
 import {
   addThreadBookmark,
   ChatMessage,
+  createThreadBranch,
   getThread,
   listThreadBookmarks,
   postChat,
   removeThreadBookmark,
   ThreadBookmark,
+  ThreadDetail,
+  updateThreadTitle,
 } from '@/lib/threadApi';
 import { getSupabaseToken } from '@/lib/apiFetch';
 import { ThreadSearchBar } from './ThreadSearchBar';
@@ -22,7 +26,6 @@ import { auth } from '@/lib/auth';
 import { InlineLoginPrompt } from './InlineLoginPrompt';
 import { WorkspaceCommentInput } from './WorkspaceCommentInput';
 
-const MODEL_OPTIONS = ['gemma3:270m', 'llama3.1:8b', 'mistral:7b'];
 const UUID_REGEX = /^[0-9a-fA-F-]{36}$/;
 
 type BookmarkToggleVars = {
@@ -32,6 +35,7 @@ type BookmarkToggleVars = {
 
 export function ChatView() {
   const params = useParams();
+  const router = useRouter();
   const threadId = params?.threadId ? String(params.threadId) : '';
   const queryClient = useQueryClient();
 
@@ -50,7 +54,12 @@ export function ChatView() {
   const [selectedModel, setSelectedModel] = useState(() =>
     getModel(threadId, MODEL_OPTIONS[0]),
   );
-  const [debugInfo, setDebugInfo] = useState<{
+
+  useEffect(() => {
+    if (!threadId) return;
+    setSelectedModel(getModel(threadId, MODEL_OPTIONS[0]));
+  }, [threadId]);
+  const [, setDebugInfo] = useState<{
     url?: string;
     status?: number;
     bodySnippet?: string;
@@ -71,7 +80,11 @@ export function ChatView() {
   const [editingText, setEditingText] = useState('');
 
   const [bookmarkNotice, setBookmarkNotice] = useState<string | null>(null);
+  const [branchError, setBranchError] = useState<string | null>(null);
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState('');
+  const [titleError, setTitleError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -79,23 +92,23 @@ export function ChatView() {
       if (active) setToken(t);
     });
 
-    const { data: subscription } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        if (!active) return;
-        const next = session?.access_token || null;
-        if (next) {
-          auth.setSession({
-            accessToken: next,
-            refreshToken: session?.refresh_token || undefined,
-          });
-        }
-        setToken(next);
-        const email = session?.user?.email || '';
-        if (email) setCommentAuthor(email.split('@')[0]);
-      },
-    );
+    const { data: subscription } = supabase
+      ? supabase.auth.onAuthStateChange((_event, session) => {
+          if (!active) return;
+          const next = session?.access_token || null;
+          if (next) {
+            auth.setSession({
+              accessToken: next,
+              refreshToken: session?.refresh_token || undefined,
+            });
+          }
+          setToken(next);
+          const email = session?.user?.email || '';
+          if (email) setCommentAuthor(email.split('@')[0]);
+        })
+      : { data: null };
 
-    supabase.auth.getSession().then(({ data }) => {
+    supabase?.auth.getSession().then(({ data }) => {
       const email = data.session?.user?.email || '';
       if (email) setCommentAuthor(email.split('@')[0]);
     });
@@ -357,6 +370,64 @@ export function ChatView() {
     },
   });
 
+  const branchMutation = useMutation({
+    mutationFn: async () => {
+      setBranchError(null);
+      if (!token) {
+        const err: any = new Error('NO_TOKEN');
+        err.code = 'NO_TOKEN';
+        throw err;
+      }
+      return createThreadBranch(threadId, selectedModel, token);
+    },
+    onSuccess: (branch) => {
+      setModel(branch.thread_id, selectedModel);
+      queryClient.invalidateQueries({ queryKey: ['threads'] });
+      queryClient.invalidateQueries({ queryKey: ['thread-branches'] });
+      router.push(`/threads/${branch.thread_id}`);
+    },
+    onError: (err: any) => {
+      const message =
+        err?.code === 'NO_TOKEN'
+          ? '로그인이 필요합니다.'
+          : err?.message || '브랜치를 만들지 못했습니다.';
+      setBranchError(message);
+    },
+  });
+
+  const titleMutation = useMutation({
+    mutationFn: async (nextTitle: string) => {
+      if (!token) {
+        throw new Error('로그인이 필요합니다.');
+      }
+      return updateThreadTitle(threadId, nextTitle, token);
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData<ThreadDetail>(
+        ['thread', threadId],
+        (current) =>
+          current ? { ...current, title: updated.title } : current,
+      );
+      void queryClient.invalidateQueries({ queryKey: ['threads'] });
+      void queryClient.invalidateQueries({ queryKey: ['thread-branches'] });
+      setIsEditingTitle(false);
+      setTitleDraft('');
+      setTitleError(null);
+    },
+    onError: (error: Error) => {
+      setTitleError(error.message || '스레드명을 수정하지 못했습니다.');
+    },
+  });
+
+  const saveTitle = () => {
+    const normalized = titleDraft.trim();
+    if (!normalized) {
+      setTitleError('스레드명을 입력하세요.');
+      return;
+    }
+    titleMutation.mutate(normalized);
+  };
+
   const toggleBookmarkMutation = useMutation({
     mutationFn: async ({
       messageIndex,
@@ -508,6 +579,10 @@ export function ChatView() {
   };
 
   const title = data?.title || 'Thread';
+  const isGeminiSelected = selectedModel.toLowerCase().startsWith('gemini');
+  const branchContextPreview = data?.context_preview
+    ? Array.from(data.context_preview).slice(0, 20).join('')
+    : '';
 
   const summaryCards = useMemo(() => {
     const byIndex = new Map<number, ChatMessage>();
@@ -654,13 +729,83 @@ export function ChatView() {
               >
                 ←
               </button>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/50">
                   Thread
                 </p>
-                <h1 className="text-xl font-bold text-white/90">
-                  {title || 'Untitled'}
-                </h1>
+                {isEditingTitle ? (
+                  <div className="mt-1">
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        autoFocus
+                        value={titleDraft}
+                        maxLength={200}
+                        disabled={titleMutation.isPending}
+                        onChange={(event) => setTitleDraft(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            saveTitle();
+                          } else if (event.key === 'Escape') {
+                            setIsEditingTitle(false);
+                            setTitleError(null);
+                          }
+                        }}
+                        aria-label="스레드명 수정"
+                        className="w-64 max-w-[45vw] rounded-lg border border-cyan-300/30 bg-white/5 px-2.5 py-1 text-base font-bold text-white outline-none focus:ring-2 focus:ring-cyan-300/40"
+                      />
+                      <button
+                        type="button"
+                        onClick={saveTitle}
+                        disabled={titleMutation.isPending}
+                        aria-label="스레드명 저장"
+                        className="rounded-md p-1.5 text-emerald-300 transition hover:bg-emerald-300/10 disabled:opacity-50"
+                      >
+                        {titleMutation.isPending ? (
+                          <span className="block h-4 w-4 animate-spin rounded-full border-2 border-emerald-300 border-t-transparent" />
+                        ) : (
+                          <Check size={16} />
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsEditingTitle(false);
+                          setTitleError(null);
+                        }}
+                        disabled={titleMutation.isPending}
+                        aria-label="스레드명 수정 취소"
+                        className="rounded-md p-1.5 text-white/45 transition hover:bg-white/10 disabled:opacity-50"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                    {titleError && (
+                      <p className="mt-1 text-xs text-rose-300">{titleError}</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex min-w-0 items-center gap-2">
+                    <h1 className="max-w-md truncate text-xl font-bold text-white/90">
+                      {title || 'Untitled'}
+                    </h1>
+                    {data?.can_rename && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTitleDraft(title || '');
+                          setTitleError(null);
+                          setIsEditingTitle(true);
+                        }}
+                        aria-label="스레드명 수정"
+                        title="스레드명 수정"
+                        className="shrink-0 rounded-md p-1.5 text-white/40 transition hover:bg-cyan-300/10 hover:text-cyan-200"
+                      >
+                        <Pencil size={15} />
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -682,6 +827,11 @@ export function ChatView() {
                   </option>
                 ))}
               </select>
+              {selectedModel === 'gemini-2.5-flash' && (
+                <span className="text-[10px] text-amber-200">
+                  최신 Flash 호환 실행
+                </span>
+              )}
               <button
                 type="button"
                 onClick={() => setIsSummaryOpen((prev) => !prev)}
@@ -692,6 +842,28 @@ export function ChatView() {
               </button>
             </div>
           </div>
+
+          {isGeminiSelected && (
+            <div className="mb-3 flex flex-wrap items-center justify-end gap-3 border-t border-white/10 pt-3">
+              {branchError && (
+                <p role="alert" className="text-xs text-rose-300">
+                  {branchError}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={() => branchMutation.mutate()}
+                disabled={branchMutation.isPending || chatMutation.isPending}
+                className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/30 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:border-cyan-200/60 hover:bg-cyan-400/20 disabled:cursor-wait disabled:opacity-60"
+              >
+                <GitBranch
+                  size={16}
+                  className={branchMutation.isPending ? 'animate-pulse' : ''}
+                />
+                {branchMutation.isPending ? '브랜치 생성 중...' : '브랜치'}
+              </button>
+            </div>
+          )}
 
           <ThreadSearchBar
             query={searchQuery}
@@ -712,6 +884,14 @@ export function ChatView() {
           >
             <div className="flex-1 overflow-y-auto rounded-2xl border border-white/10 bg-white/5 p-4 shadow-lg backdrop-blur">
               <div className="space-y-4">
+                {branchContextPreview && (
+                  <div
+                    role="status"
+                    className="sticky top-0 z-10 mx-auto w-fit max-w-full rounded-full border border-cyan-300/30 bg-slate-950/90 px-4 py-2 text-center text-xs font-semibold text-cyan-100 shadow-lg backdrop-blur"
+                  >
+                    이전 Gemini 컨텍스트 · {branchContextPreview}
+                  </div>
+                )}
                 {messages.map((m, idx) => {
                   const commentTargetId = resolveCommentTargetId(m, idx);
                   const isMessageBlock = typeof m?.content === 'string';
@@ -872,13 +1052,21 @@ export function ChatView() {
                   placeholder="Type a message"
                   className="min-h-[64px] flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400"
                 />
-                <button
-                  onClick={handleSend}
-                  disabled={chatMutation.isPending}
-                  className="h-11 shrink-0 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-md transition hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {chatMutation.isPending ? 'Sending...' : 'Send'}
-                </button>
+                <div className="relative shrink-0 overflow-hidden rounded-xl p-[2px]">
+                  {chatMutation.isPending && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute inset-[-150%] animate-[spin_1.15s_linear_infinite] bg-[conic-gradient(from_0deg,transparent_0deg,transparent_255deg,#67e8f9_300deg,#ffffff_330deg,transparent_360deg)]"
+                    />
+                  )}
+                  <button
+                    onClick={handleSend}
+                    disabled={chatMutation.isPending}
+                    className="relative z-10 h-11 rounded-[10px] bg-blue-600 px-4 text-sm font-semibold text-white shadow-md transition hover:bg-blue-700 disabled:cursor-wait"
+                  >
+                    {chatMutation.isPending ? 'Sending...' : 'Send'}
+                  </button>
+                </div>
               </div>
 
               {commentNotice && (

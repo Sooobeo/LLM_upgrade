@@ -5,7 +5,7 @@ from typing import Any, Dict
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app.db.supabase import SupabaseAuthError, get_user_from_access_token
+from app.db.supabase import SupabaseAuthError, SupabaseUnavailableError, get_user_from_access_token
 
 # Swagger/OpenAPI에서 Bearer 인증 스킴을 인식시키기 위해 HTTPBearer 사용
 _bearer_scheme = HTTPBearer(auto_error=False)
@@ -55,6 +55,14 @@ async def get_current_user(
     """
     try:
         supabase_user = await get_user_from_access_token(access_token)
+    except SupabaseUnavailableError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "SUPABASE_UNAVAILABLE",
+                "message": "백엔드에서 Supabase Auth에 연결할 수 없습니다. 백엔드를 네트워크 권한이 있는 상태로 실행하세요.",
+            },
+        )
     except SupabaseAuthError:
         # 보안상 debug 세부 내용을 기본 응답에 포함하지 않는 것을 권장
         raise HTTPException(

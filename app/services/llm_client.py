@@ -1,6 +1,7 @@
 # app/services/llm_client.py
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import uuid
@@ -8,6 +9,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
 import httpx
+from google import genai
+from google.genai import types
 
 from app.core.config import settings
 
@@ -75,6 +78,15 @@ def describe_llm_config(model: Optional[str] = None) -> Dict[str, Any]:
             "host": _safe_host(settings.LLM_FALLBACK_BASE_URL),
             "kind": (settings.LLM_FALLBACK_KIND or "same_as_primary"),
         },
+        "gemini": {
+            "model": settings.GEMINI_MODEL,
+            "effective_model": (
+                settings.GEMINI_2_5_COMPAT_MODEL
+                if settings.GEMINI_MODEL == "gemini-2.5-flash"
+                else settings.GEMINI_MODEL
+            ),
+            "configured": bool((settings.GEMINI_API_KEY or "").strip()),
+        },
     }
 
 
@@ -85,6 +97,130 @@ def validate_llm_config() -> None:
         raise RuntimeError("LLM_PRIMARY_PATH is not set; add it to your .env for local dev.")
     if not settings.LLM_MODEL:
         raise RuntimeError("LLM_MODEL is not set; add it to your .env for local dev.")
+
+
+def _is_gemini_model(model: str) -> bool:
+    return (model or "").lower().startswith("gemini-")
+
+
+def _build_gemini_contents(
+    messages: List[Dict[str, str]],
+) -> Tuple[List[types.Content], str | None]:
+    contents: List[types.Content] = []
+    system_instructions: List[str] = []
+
+    for message in messages:
+        content = str(message.get("content") or "").strip()
+        if not content:
+            continue
+
+        role = (message.get("role") or "user").lower()
+        if role == "system":
+            system_instructions.append(content)
+            continue
+
+        gemini_role = "model" if role == "assistant" else "user"
+        contents.append(
+            types.Content(
+                role=gemini_role,
+                parts=[types.Part.from_text(text=content)],
+            )
+        )
+
+    system_instruction = "\n\n".join(system_instructions) or None
+    return contents, system_instruction
+
+
+async def _generate_gemini(
+    model: str,
+    messages: List[Dict[str, str]],
+) -> str:
+    api_key = (settings.GEMINI_API_KEY or "").strip()
+    if not api_key:
+        raise LLMUpstreamError(
+            provider="gemini",
+            message="GEMINI_API_KEY is not configured on the backend.",
+            code="GEMINI_NOT_CONFIGURED",
+        )
+
+    contents, system_instruction = _build_gemini_contents(messages)
+    if not contents:
+        raise LLMUpstreamError(
+            provider="gemini",
+            message="Gemini request has no user or assistant content.",
+            code="EMPTY_PROMPT",
+        )
+
+    effective_model = (
+        settings.GEMINI_2_5_COMPAT_MODEL
+        if model == "gemini-2.5-flash"
+        else model
+    )
+    if effective_model != model:
+        logger.warning(
+            "Gemini compatibility model override",
+            extra={"requested_model": model, "effective_model": effective_model},
+        )
+
+    client = genai.Client(api_key=api_key)
+    async_client = client.aio
+    try:
+        response = await asyncio.wait_for(
+            async_client.models.generate_content(
+                model=effective_model,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_instruction,
+                ),
+            ),
+            timeout=float(settings.GEMINI_TIMEOUT_SECS),
+        )
+        text = (response.text or "").strip()
+        if not text:
+            raise LLMUpstreamError(
+                provider="gemini",
+                message="Gemini returned an empty completion.",
+                code="EMPTY_COMPLETION",
+            )
+        return text
+    except asyncio.TimeoutError as exc:
+        raise LLMUpstreamError(
+            provider="gemini",
+            message=f"Gemini request timed out after {settings.GEMINI_TIMEOUT_SECS:g}s.",
+            code="HTTP_ERROR",
+        ) from exc
+    except LLMUpstreamError:
+        raise
+    except Exception as exc:
+        message = str(exc)
+        status = getattr(exc, "status_code", None)
+        if not isinstance(status, int):
+            response = getattr(exc, "response", None)
+            status = getattr(response, "status_code", None)
+        if not isinstance(status, int):
+            status = 401 if "401 UNAUTHENTICATED" in message else None
+
+        if status == 401 or "UNAUTHENTICATED" in message:
+            code = "GEMINI_AUTH_FAILED"
+            safe_message = (
+                "Gemini API key was rejected. Create a Gemini API Auth Key in "
+                "Google AI Studio, update GEMINI_API_KEY, and restart the backend."
+            )
+        elif status == 404 and "no longer available to new users" in message:
+            code = "MODEL_NOT_AVAILABLE"
+            safe_message = f"Gemini model {effective_model} is not available for this API key."
+        else:
+            code = "GEMINI_FAILED"
+            safe_message = f"Gemini request failed: {message[:200]}"
+
+        raise LLMUpstreamError(
+            provider="gemini",
+            status=status,
+            message=safe_message,
+            code=code,
+        ) from exc
+    finally:
+        await async_client.aclose()
 
 
 def _build_payload(kind: str, model: str, messages: List[Dict[str, str]], endpoint_path: Optional[str] = None) -> Dict[str, Any]:
@@ -389,11 +525,14 @@ async def _post_llm(
 
 
 async def generate(model: Optional[str], messages: List[Dict[str, str]]) -> str:
-    validate_llm_config()
-
     requested_model = model or settings.LLM_MODEL
     if not requested_model:
         raise RuntimeError("LLM_MODEL must be configured (env LLM_MODEL).")
+
+    if _is_gemini_model(requested_model):
+        return await _generate_gemini(requested_model, messages)
+
+    validate_llm_config()
 
     # Ensure a system prompt to reduce echoing user input on minimal models.
     msgs = list(messages) if messages else []
@@ -443,8 +582,6 @@ async def generate(model: Optional[str], messages: List[Dict[str, str]]) -> str:
             primary_error = exc
             if attempt >= max_retries or not should_retry(exc):
                 break
-            import asyncio
-
             await asyncio.sleep(backoffs[min(attempt, len(backoffs) - 1)])
             attempt += 1
 

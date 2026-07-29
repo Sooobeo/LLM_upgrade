@@ -24,6 +24,7 @@ export type DebugInfo = {
 async function getAccessToken(): Promise<string | null> {
   const stored = auth.getToken();
   if (stored) return stored;
+  if (!supabase) return null;
 
   // Supabase session fallback (auto-refreshes if needed)
   const sessionRes = await supabase.auth.getSession();
@@ -76,6 +77,7 @@ function extractErrorMessage(payload: unknown, fallback: string): string {
 }
 
 async function refreshToken(): Promise<string | null> {
+  if (!supabase) return null;
   try {
     const res = await supabase.auth.refreshSession();
     const token = res.data.session?.access_token || null;
@@ -102,7 +104,7 @@ export async function apiClient(
     headers.set("Content-Type", "application/json");
   }
 
-  let token = headers.get("Authorization")?.replace(/^Bearer\s+/i, "") || (await getAccessToken());
+  const token = headers.get("Authorization")?.replace(/^Bearer\s+/i, "") || (await getAccessToken());
   const hasAuth = !!token;
   if (token) headers.set("Authorization", `Bearer ${token}`);
   else {

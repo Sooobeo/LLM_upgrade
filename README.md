@@ -1,154 +1,91 @@
-# 🚀 LLM-Upgrade Backend
+# LLM Upgrade
 
-> Supabase 기반 인증 및 데이터 관리를 사용하는 **LLM-Upgrade FastAPI 서버**입니다.
-> FastAPI, Pydantic, Supabase REST API를 활용해 인증, 스레드, 메시지 관리 기능을 제공합니다.
+FastAPI + Supabase 백엔드와 Next.js 프론트엔드로 구성된 대화 기록 및
+워크스페이스 애플리케이션입니다.
 
----
+## 요구 환경
 
-## 📦 프로젝트 개요
+- Python 3.10 이상 (Python 3.13 확인 완료)
+- Node.js 18.17 이상
+- Supabase 프로젝트
+- 선택 사항: LLM API 또는 로컬 Ollama
 
-이 백엔드는 LLM-Upgrade 서비스의 핵심 API 서버입니다.
+## 1. 백엔드 실행
 
-* 로그인 및 토큰 관리 (`/auth/...`)
-* 스레드 및 메시지 관리 (`/threads/...`)
-* 헬스체크 (`/health`)
+Windows PowerShell:
 
----
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+Copy-Item .env.example .env
+```
 
-## 🧩 기술 스택
-
-| 구분        | 내용                          |
-| --------- | --------------------------- |
-| Framework | FastAPI                     |
-| Database  | Supabase (PostgreSQL + RLS) |
-| Language  | Python 3.10+                |
-| Auth      | Supabase Auth (JWT 기반)      |
-| Infra     | Docker / AWS EC2            |
-| Docs      | Swagger UI (`/docs`)        |
-
----
-
-## 📁 폴더 구조
+macOS/Linux:
 
 ```bash
-app/
- ┣ db/                # Supabase 연결 및 인증 종속성
- ┃ ┣ deps.py          # access_token → current_user 변환
- ┃ ┗ supabase.py      # Supabase REST API 유틸
- ┣ repository/        # 비즈니스 로직 (DB 연동)
- ┃ ┣ auth.py          # 로그인, 토큰 교환, 로그아웃
- ┃ ┗ thread.py        # 스레드/메시지 CRUD
- ┣ routes/            # 라우팅 계층 (엔드포인트 정의)
- ┃ ┣ auth.py          # /auth/*
- ┃ ┣ thread.py        # /threads/*
- ┃ ┗ health.py        # /health
- ┣ schemas/           # Pydantic 스키마 정의
- ┃ ┣ auth.py          # 인증 관련 스키마
- ┃ ┗ thread.py        # 스레드/메시지 스키마
- ┗ main.py            # FastAPI 앱 진입점
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+cp .env.example .env
 ```
 
----
-
-## ⚙️ 환경 설정
-
-루트에 `.env` 파일을 생성하고, 공유받은 값을 입력하세요.
-
----
-
-## 🐍 가상환경 및 설치
+`.env`의 `SUPABASE_URL`, `SUPABASE_ANON_KEY`를 실제 값으로 바꾼 뒤 실행합니다.
+관리자 사용자 조회와 워크스페이스 멤버 기능을 사용하려면
+`SUPABASE_SERVICE_ROLE_KEY`도 필요합니다.
 
 ```bash
-# 가상환경 생성
-python -m venv venv
-
-# 활성화 (Windows)
-source venv/Scripts/activate
-
-# 활성화 (Mac/Linux)
-source venv/bin/activate
-
-# 패키지 설치
-pip install -r requirements.txt
+python -m uvicorn app.main:app --reload
 ```
 
----
+- API: http://127.0.0.1:8000
+- Swagger: http://127.0.0.1:8000/docs
+- LLM 상태: http://127.0.0.1:8000/health/llm
 
-## ▶️ 서버 실행
+## 2. 프론트엔드 실행
 
-```bash
-uvicorn app.main:app --reload
+별도 터미널에서:
+
+```powershell
+cd frontend
+npm ci
+Copy-Item .env.example .env.local
+npm run dev
 ```
 
-기본 실행 주소:
-http://127.0.0.1:8000
+macOS/Linux에서는 `cp .env.example .env.local`을 사용합니다.
 
----
+프론트엔드는 기본적으로 http://localhost:3000, 백엔드는
+http://127.0.0.1:8000을 사용합니다.
 
-## 🧾 API 문서
+## 검사 명령
 
-* Swagger UI: http://127.0.0.1:8000/docs
-* ReDoc: http://127.0.0.1:8000/redoc
+```powershell
+# 저장소 루트
+.\.venv\Scripts\python.exe -m compileall -q app
+.\.venv\Scripts\python.exe -m pip check
 
----
-
-## 🧪 Postman 테스트
-
-* Authorization → Bearer Token 설정
-* 발급받은 access_token 입력
-* `/auth/refresh`는 HttpOnly 쿠키 기반으로 동작
-
----
-
-## 🤖 LLM 설정
-
-### 환경 변수
-
-* `LLM_PRIMARY_BASE_URL` (기본: https://llm.ycc.club)
-* `LLM_PRIMARY_PATH` (기본: /api/generate)
-* `LLM_FALLBACK_BASE_URL` (선택: http://127.0.0.1:11434)
-* `LLM_FALLBACK_PATH` (기본: /api/generate 또는 /api/chat)
-* `LLM_FALLBACK_KIND` (same_as_primary | ollama | openai_compatible)
-* `LLM_REQUEST_TIMEOUT_SECS` (기본: 60)
-* `LLM_TLS_VERIFY` (기본: True)
-
-헬스체크:
-
-```
-GET /health/llm
+# frontend 폴더
+npm run lint
+npm run build
 ```
 
----
+실제 비밀 키가 든 `.env`와 `frontend/.env.local`은 Git에 커밋하지 마세요.
 
-## 🦙 Ollama 사용 방법
+## Google Gemini 모델
 
-```bash
-# 모델 다운로드
-ollama pull llama3.1:8b
-
-# 서버 실행
-ollama serve
-```
-
-### 환경 변수 예시
+Gemini를 사용하려면 저장소 루트의 `.env`에 서버용 API 키를 설정합니다.
 
 ```env
-LLM_PRIMARY_BASE_URL=https://llm.ycc.club
-LLM_PRIMARY_PATH=/api/generate
-LLM_FALLBACK_KIND=ollama
-LLM_FALLBACK_BASE_URL=http://127.0.0.1:11434
-LLM_FALLBACK_PATH=/api/chat
-LLM_FALLBACK_MODEL=llama3.1:8b
-LLM_REQUEST_TIMEOUT_SECS=60
+GEMINI_API_KEY=your-google-gemini-api-key
+GEMINI_MODEL=gemini-2.5-flash
+GEMINI_2_5_COMPAT_MODEL=gemini-3.6-flash
 ```
 
----
-
-## ⚠️ 실행 전 주의사항
-
-```bash
-# FE 실행 전에 반드시 백엔드 먼저 실행
-uvicorn app.main:app --reload
-```
-
-
+API 키에는 `NEXT_PUBLIC_` 접두사를 붙이지 마세요. 프론트엔드 번들에 키가
+노출됩니다. 설정 후 백엔드를 재시작하면 새 스레드와 기존 채팅의 모델
+선택 목록에는 `gemini-2.5-flash`가 표시됩니다. Google은 신규 API 키에
+2.5 Flash 제공을 종료했으므로 실제 요청은 `GEMINI_2_5_COMPAT_MODEL`에
+설정된 최신 호환 모델로 실행됩니다.

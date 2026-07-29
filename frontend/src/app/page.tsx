@@ -2,32 +2,20 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 
-import { auth } from "@/lib/auth";
 import { supabase } from "@/lib/supabaseClient";
 
 export default function LandingPage() {
   const router = useRouter();
-  const [hasSession, setHasSession] = useState<boolean>(false);
   const [showLogin, setShowLogin] = useState(false);
   const containerRef = useRef<HTMLElement | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
 
-  useEffect(() => {
+  const handleGoogleLogin = async () => {
     if (!supabase) {
-      const token = auth.getToken();
-      setHasSession(!!token);
+      router.push("/login");
       return;
     }
-
-    supabase.auth.getSession().then(({ data }) => {
-      const token = data.session?.access_token || auth.getToken();
-      setHasSession(!!token);
-    });
-  }, []);
-
-  const handleGoogleLogin = async () => {
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
@@ -195,20 +183,12 @@ export default function LandingPage() {
                   </button>
 
                   <button
-                    onClick={() => router.push("/login")}
+                    onClick={() => router.push("/threads")}
                     className="rounded-xl bg-[#0d1b33] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#0f223e]"
                   >
                     이메일로 로그인
                   </button>
 
-                  {hasSession && (
-                    <button
-                      onClick={() => router.push("/threads")}
-                      className="rounded-xl border border-blue-300 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700"
-                    >
-                      스레드로 이동 →
-                    </button>
-                  )}
                 </div>
 
               </div>

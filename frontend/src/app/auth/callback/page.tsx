@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { API_BASE_URL } from "@/lib/apiFetch";
 
 type TokenParams = Record<string, string>;
 
@@ -31,8 +32,7 @@ export default function AuthCallbackPage() {
       return () => clearTimeout(t);
     }
 
-    const backend = process.env.NEXT_PUBLIC_BACKEND_API_BASE_URL;
-    fetch(`${backend}/auth/google/set-session`, {
+    fetch(`${API_BASE_URL}/auth/google/set-session`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",

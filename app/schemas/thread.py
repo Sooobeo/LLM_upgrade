@@ -15,6 +15,14 @@ class ThreadCreateResp(BaseModel):
     thread_id: str
     status: Literal["saved"]
 
+class ThreadTitleUpdate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200)
+
+class ThreadTitleUpdateResp(BaseModel):
+    thread_id: str
+    title: str
+    status: Literal["saved"]
+
 class ThreadSummary(BaseModel):
     id: str
     title: str
@@ -36,7 +44,10 @@ class ThreadDetailResp(BaseModel):
     title: str
     created_at: str
     is_workspace: bool
+    can_rename: bool = False
     messages: List[MessageOut]
+    parent_thread_id: Optional[str] = None
+    context_preview: Optional[str] = None
 
 class MessageRow(BaseModel):
     index: int
@@ -80,6 +91,34 @@ class ChatRequest(ChatBody):
 
 class ChatResponse(ChatResp):
     pass
+
+
+class BranchCreate(BaseModel):
+    model: Optional[str] = None
+
+
+class BranchCreateResp(BaseModel):
+    thread_id: str
+    title: str
+    parent_thread_id: str
+    context_preview: str = Field(..., max_length=20)
+    status: Literal["saved"] = "saved"
+
+
+class BranchNode(BaseModel):
+    id: str
+    thread_id: str
+    title: str
+    parent_thread_id: Optional[str] = None
+    context_preview: Optional[str] = Field(default=None, max_length=20)
+    created_at: str
+    is_deleted: bool = False
+    can_manage: bool = False
+    children: List["BranchNode"] = Field(default_factory=list)
+
+
+class BranchesResp(BaseModel):
+    roots: List[BranchNode]
 
 
 class BookmarkIn(BaseModel):

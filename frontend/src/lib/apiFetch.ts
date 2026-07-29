@@ -1,7 +1,7 @@
 import { auth } from "./auth";
 import { supabase } from "./supabaseClient";
 
-const API_BASE =
+export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ||
   process.env.NEXT_PUBLIC_BACKEND_API_BASE_URL ||
   "http://127.0.0.1:8000";
@@ -16,22 +16,29 @@ export type FetchDebug = {
 
 function buildUrl(path: string) {
   if (path.startsWith("http://") || path.startsWith("https://")) return path;
-  if (!path.startsWith("/")) return `${API_BASE}/${path}`;
-  return `${API_BASE}${path}`;
+  if (!path.startsWith("/")) return `${API_BASE_URL}/${path}`;
+  return `${API_BASE_URL}${path}`;
 }
 
 export async function getSupabaseToken(): Promise<string | null> {
-  const local = auth.getToken();
-  if (local) return local;
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token || null;
-  if (token) {
-    auth.setSession({
-      accessToken: token,
-      refreshToken: data.session?.refresh_token || undefined,
-    });
+  if (supabase) {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) {
+      auth.clear();
+      return null;
+    }
+    const token = data.session?.access_token || null;
+    if (token) {
+      auth.setSession({
+        accessToken: token,
+        refreshToken: data.session?.refresh_token || undefined,
+      });
+      return token;
+    }
+    auth.clear();
+    return null;
   }
-  return token;
+  return auth.getToken();
 }
 
 export async function apiFetch(
@@ -61,12 +68,22 @@ export async function apiFetch(
       ? JSON.stringify(options.body)
       : options.body;
 
-  const res = await fetch(url, {
-    ...options,
-    method,
-    headers,
-    body,
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...options,
+      method,
+      headers,
+      body,
+    });
+  } catch (cause) {
+    const err: any = new Error(
+      `백엔드에 연결할 수 없습니다 (${API_BASE_URL}). 백엔드 서버가 실행 중인지 확인하세요.`,
+    );
+    err.code = "BACKEND_UNREACHABLE";
+    err.cause = cause;
+    throw err;
+  }
 
   const text = await res.text();
   const snippet = text.slice(0, 300);

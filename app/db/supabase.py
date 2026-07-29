@@ -18,6 +18,10 @@ class SupabaseAuthError(Exception):
     """Supabase 토큰 검증 실패용 커스텀 예외"""
 
 
+class SupabaseUnavailableError(SupabaseAuthError):
+    """Supabase Auth endpoint is unreachable from the backend."""
+
+
 def _get_env(name: str) -> Optional[str]:
     """settings에서 문자열 값을 읽어와 공백을 제거합니다."""
     v = getattr(settings, name, None)
@@ -116,6 +120,29 @@ def rest_select(table: str, query: str, access_token: str) -> List[Dict[str, Any
     return r.json()
 
 
+def rest_select_as_service(table: str, query: str) -> List[Dict[str, Any]]:
+    """
+    Read rows with the service role after a route/repository has already
+    authorized the caller with their authenticated JWT.
+
+    This is reserved for shared-workspace reads where table RLS correctly
+    protects writes but intentionally hides rows authored by another member.
+    Callers must restrict the query to previously authorized resource IDs.
+    """
+    service_key = _get_env("SUPABASE_SERVICE_ROLE_KEY")
+    if not service_key:
+        raise ConfigError("SUPABASE_SERVICE_ROLE_KEY is not configured.")
+    url = f"{_base_url()}/rest/v1/{table}?{query}"
+    headers = {
+        "apikey": service_key,
+        "Authorization": f"Bearer {service_key}",
+        "Content-Type": "application/json",
+    }
+    r = requests.get(url, headers=headers, timeout=15)
+    r.raise_for_status()
+    return r.json()
+
+
 def rest_delete(table: str, query: str, access_token: str) -> int:
     url = f"{_base_url()}/rest/v1/{table}?{query}"
     headers = {**_auth_headers(access_token), "Prefer": "return=representation"}
@@ -164,8 +191,11 @@ async def get_user_from_access_token(access_token: str) -> Dict[str, Any]:
     url = f"{base_url}/auth/v1/user"
     headers = {"apikey": api_key, "Authorization": f"Bearer {access_token}"}
 
-    async with httpx.AsyncClient(timeout=10) as client:
-        resp = await client.get(url, headers=headers)
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(url, headers=headers)
+    except httpx.RequestError as exc:
+        raise SupabaseUnavailableError(f"Supabase Auth에 연결할 수 없습니다: {exc}") from exc
 
     if resp.status_code != 200:
         raise SupabaseAuthError(f"Supabase /auth/v1/user 호출 실패: {resp.status_code} {resp.text}")

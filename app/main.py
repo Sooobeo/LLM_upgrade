@@ -1,11 +1,9 @@
 from typing import Optional
 import logging
 
-import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
-from pydantic import BaseModel
 
 from app.core.config import settings
 from app.routes import auth, comment, health, thread, user, debug
@@ -67,60 +65,11 @@ app.include_router(auth.router)
 app.include_router(user.router)
 app.include_router(debug.router)
 app.include_router(comment.router)
+app.include_router(comment.branch_router)
 
 
 # ==============================
-# 1) Google ID Token exchange
-#    POST /auth/google/exchange-id-token
-# ==============================
-@app.post("/auth/google/exchange-id-token")
-async def exchange_id_token(payload: dict):
-    """
-    Exchange Google ID Token with Supabase Auth.
-    """
-    required = ["provider", "id_token", "client_id"]
-    if any(k not in payload for k in required):
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error": "missing fields",
-                "required": required,
-                "got": list(payload.keys()),
-            },
-        )
-
-    supabase_url = (settings.SUPABASE_URL or "").rstrip("/")
-    supabase_anon_key = settings.SUPABASE_ANON_KEY
-
-    if not supabase_url or not supabase_anon_key:
-        raise HTTPException(
-            status_code=500,
-            detail="missing settings.SUPABASE_URL / settings.SUPABASE_ANON_KEY",
-        )
-
-    url = f"{supabase_url}/auth/v1/token?grant_type=id_token"
-    headers = {
-        "Content-Type": "application/json",
-        "apikey": supabase_anon_key,
-        "Authorization": f"Bearer {supabase_anon_key}",
-    }
-
-    async with httpx.AsyncClient(timeout=15) as client:
-        r = await client.post(url, headers=headers, json=payload)
-
-    try:
-        data = r.json()
-    except Exception:
-        data = {"raw": r.text}
-
-    if r.status_code >= 400:
-        raise HTTPException(status_code=r.status_code, detail=data)
-
-    return data
-
-
-# ==============================
-# 2) owner_id-based search (disabled placeholder)
+# 1) owner_id-based search (disabled placeholder)
 #    GET /messages
 # ==============================
 @app.get("/messages")
@@ -140,7 +89,7 @@ def get_messages(
 
 
 # ==============================
-# 3) Environment check
+# 2) Environment check
 #    GET /_env_check
 # ==============================
 @app.get("/_env_check")
@@ -160,7 +109,7 @@ def env_check():
 
 
 # ==============================
-# 4) OpenAPI server URL customization
+# 3) OpenAPI server URL customization
 # ==============================
 def custom_openapi():
     if app.openapi_schema:
