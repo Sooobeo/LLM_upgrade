@@ -12,6 +12,7 @@ export default function LandingPage() {
   const [isAnimating, setIsAnimating] = useState(false);
   const [googleLoginLoading, setGoogleLoginLoading] = useState(false);
   const [googleLoginError, setGoogleLoginError] = useState<string | null>(null);
+  const [oauthRedirecting, setOauthRedirecting] = useState(false);
 
   const handleGoogleLogin = async () => {
     setGoogleLoginLoading(true);
@@ -56,6 +57,30 @@ export default function LandingPage() {
   };
 
   useEffect(() => {
+    const hashParams = new URLSearchParams(
+      window.location.hash.startsWith("#")
+        ? window.location.hash.slice(1)
+        : window.location.hash,
+    );
+    const searchParams = new URLSearchParams(window.location.search);
+    const isOAuthReturn = [
+      "access_token",
+      "refresh_token",
+      "error",
+      "error_code",
+      "error_description",
+    ].some((key) => hashParams.has(key) || searchParams.has(key));
+
+    if (!isOAuthReturn) return;
+
+    setOauthRedirecting(true);
+    const callbackUrl = new URL("/auth/callback", window.location.origin);
+    callbackUrl.search = window.location.search;
+    callbackUrl.hash = window.location.hash;
+    window.location.replace(callbackUrl.toString());
+  }, []);
+
+  useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
 
@@ -84,6 +109,24 @@ export default function LandingPage() {
     };
   }, [showLogin, isAnimating]);
 
+  if (oauthRedirecting) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#0c1424] text-white">
+        <div
+          role="status"
+          className="rounded-2xl border border-white/10 bg-white/5 px-6 py-5 text-center shadow-lg backdrop-blur"
+        >
+          <span
+            aria-hidden="true"
+            className="mx-auto mb-3 block h-6 w-6 animate-spin rounded-full border-2 border-blue-200/30 border-t-cyan-300"
+          />
+          <p className="text-sm text-blue-100">
+            Google 로그인을 완료하는 중입니다...
+          </p>
+        </div>
+      </main>
+    );
+  }
 
   return (
       <main

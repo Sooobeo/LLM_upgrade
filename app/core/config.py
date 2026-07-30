@@ -35,7 +35,7 @@ class Settings(BaseSettings):
         r"^https://happyllm(?:-[a-z0-9-]+-sooobeo1)?\.vercel\.app$"
     )
     GOOGLE_OAUTH_REDIRECT_URL: str = (
-        "https://happyllm.vercel.app/auth/callback"
+        "https://happyllm.vercel.app"
     )
     TRUSTED_HOSTS: str = "localhost,127.0.0.1,testserver"
     MAX_REQUEST_BODY_BYTES: int = 1_048_576

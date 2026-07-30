@@ -158,7 +158,7 @@ def test_production_preview_login_uses_stable_callback(monkeypatch):
 
     assert response.status_code == 200
     assert (
-        "redirect_to=https%3A%2F%2Fhappyllm.vercel.app%2Fauth%2Fcallback"
+        "redirect_to=https%3A%2F%2Fhappyllm.vercel.app"
         in response.json()["authorize_url"]
     )
 
