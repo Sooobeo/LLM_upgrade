@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 
-import { supabase } from "@/lib/supabaseClient";
+import { API_BASE_URL } from "@/lib/apiFetch";
 
 export default function LandingPage() {
   const router = useRouter();
@@ -11,19 +11,13 @@ export default function LandingPage() {
   const containerRef = useRef<HTMLElement | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
 
-  const handleGoogleLogin = async () => {
-    if (!supabase) {
-      router.push("/login");
-      return;
-    }
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        // The callback exchanges Supabase's refresh token for the backend's
-        // HttpOnly session cookie before entering authenticated pages.
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
+  const handleGoogleLogin = () => {
+    const oauthUrl = new URL("/auth/google/login", API_BASE_URL);
+    oauthUrl.searchParams.set(
+      "redirect_to",
+      `${window.location.origin}/auth/callback`,
+    );
+    window.location.assign(oauthUrl.toString());
   };
 
   useEffect(() => {
