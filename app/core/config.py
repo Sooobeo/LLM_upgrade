@@ -105,9 +105,21 @@ class Settings(BaseSettings):
     def trusted_hosts(self) -> list[str]:
         return [value.strip() for value in self.TRUSTED_HOSTS.split(",") if value.strip()]
 
+    @field_validator("APP_ENV", mode="before")
+    @classmethod
+    def _normalize_app_env(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        normalized = value.strip().lower()
+        aliases = {
+            "development": AppEnv.dev.value,
+            "production": AppEnv.prod.value,
+        }
+        return aliases.get(normalized, normalized)
+
     @field_validator("SUPABASE_URL")
     @classmethod
     def _strip_url(cls, v: str) -> str:
-        return v.rstrip("/")
+        return v.strip().rstrip("/")
 
 settings = Settings()
