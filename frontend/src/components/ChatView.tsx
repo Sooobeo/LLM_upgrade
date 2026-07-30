@@ -3,7 +3,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Pencil, Trash2, Check, X, GitBranch } from 'lucide-react';
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  GitBranch,
+  Pencil,
+  Trash2,
+  X,
+} from 'lucide-react';
 
 import { getModel, setModel } from '@/lib/modelStore';
 import { MODEL_OPTIONS } from '@/lib/models';
@@ -32,6 +40,7 @@ import { InlineLoginPrompt } from './InlineLoginPrompt';
 import { WorkspaceCommentInput } from './WorkspaceCommentInput';
 
 const UUID_REGEX = /^[0-9a-fA-F-]{36}$/;
+const SUMMARY_PREVIEW_MAX_CHARS = 800;
 
 type BookmarkToggleVars = {
   messageIndex: number;
@@ -105,6 +114,7 @@ export function ChatView() {
   const [bookmarkNotice, setBookmarkNotice] = useState<string | null>(null);
   const [branchError, setBranchError] = useState<string | null>(null);
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
+  const [summaryCardIndex, setSummaryCardIndex] = useState(0);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [titleError, setTitleError] = useState<string | null>(null);
@@ -603,11 +613,34 @@ export function ChatView() {
         return {
           messageIndex: b.message_index,
           role: message?.role || 'unknown',
-          content: message?.content || '(message unavailable in current view)',
+          content: (() => {
+            const content =
+              message?.content || '(message unavailable in current view)';
+            const characters = Array.from(content);
+            return characters.length > SUMMARY_PREVIEW_MAX_CHARS
+              ? `${characters
+                  .slice(0, SUMMARY_PREVIEW_MAX_CHARS)
+                  .join('')}…`
+              : content;
+          })(),
           createdAt: b.created_at,
         };
       });
   }, [bookmarkRows, messages]);
+
+  const activeSummaryCard = summaryCards[summaryCardIndex] || null;
+
+  useEffect(() => {
+    setSummaryCardIndex((current) =>
+      summaryCards.length === 0
+        ? 0
+        : Math.min(current, summaryCards.length - 1),
+    );
+  }, [summaryCards.length]);
+
+  useEffect(() => {
+    setSummaryCardIndex(0);
+  }, [threadId]);
 
   useEffect(() => {
     if (!data?.messages) return;
@@ -1092,73 +1125,172 @@ export function ChatView() {
 
           {isSummaryOpen && (
             <aside className="absolute inset-0 z-40 min-h-0 lg:static lg:col-span-1">
-              <div className="flex h-full min-h-0 flex-col rounded-2xl border border-white/15 bg-slate-950/95 p-4 shadow-2xl backdrop-blur lg:bg-white/5 lg:shadow-lg">
-                <div className="mb-3 flex items-center justify-between">
-                  <h2 className="text-sm font-semibold text-white/90">
-                    Summary Card
-                  </h2>
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-white/80">
-                      {summaryCards.length}
+              <div
+                className="flex h-full min-h-0 flex-col rounded-2xl border border-white/15 bg-slate-950/95 p-3 shadow-2xl backdrop-blur sm:p-4 lg:bg-white/5 lg:shadow-lg"
+                aria-label="요약 카드 캐러셀"
+                aria-roledescription="carousel"
+                onKeyDown={(event) => {
+                  if (event.key === 'ArrowLeft' && summaryCardIndex > 0) {
+                    event.preventDefault();
+                    setSummaryCardIndex((current) => current - 1);
+                  } else if (
+                    event.key === 'ArrowRight' &&
+                    summaryCardIndex < summaryCards.length - 1
+                  ) {
+                    event.preventDefault();
+                    setSummaryCardIndex((current) => current + 1);
+                  }
+                }}
+              >
+                <div className="mb-3 flex min-h-11 shrink-0 items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-semibold text-white">
+                      요약 카드
+                    </h2>
+                    <p className="mt-0.5 text-[10px] text-white/50">
+                      북마크한 메시지 미리보기
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span
+                      className="min-w-12 rounded-full bg-white/10 px-2 py-1 text-center text-xs font-semibold text-white/80"
+                      aria-live="polite"
+                    >
+                      {summaryCards.length === 0
+                        ? '0 / 0'
+                        : `${summaryCardIndex + 1} / ${summaryCards.length}`}
                     </span>
                     <button
                       type="button"
                       onClick={() => setIsSummaryOpen(false)}
                       aria-label="요약 카드 닫기"
-                      className="flex h-11 w-11 items-center justify-center rounded-lg text-white/65 hover:bg-white/10 hover:text-white lg:hidden"
+                      className="flex h-11 w-11 items-center justify-center rounded-xl text-white/65 transition hover:bg-white/10 hover:text-white lg:hidden"
                     >
-                      <X size={17} />
+                      <X size={18} />
                     </button>
                   </div>
                 </div>
 
                 {bookmarkError && (
-                  <div className="mb-3 rounded-lg border border-amber-300/30 bg-amber-300/10 px-2 py-1 text-xs text-amber-100">
-                    Failed to load bookmarks:{' '}
-                    {(bookmarkError as any)?.message || 'unknown error'}
+                  <div className="mb-3 shrink-0 rounded-lg border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-xs text-amber-100">
+                    북마크를 불러오지 못했습니다:{' '}
+                    {(bookmarkError as any)?.message || '알 수 없는 오류'}
                   </div>
                 )}
 
-                <div className="flex-1 space-y-2 overflow-y-auto pr-1">
-                  {summaryCards.length === 0 ? (
-                    <p className="rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-white/70">
-                      북마크한 메시지가 아직 없습니다.
-                    </p>
-                  ) : (
-                    summaryCards.map((card) => (
-                      <div
-                        key={card.messageIndex}
-                        className="rounded-xl border border-white/10 bg-white/5 p-2"
-                      >
+                <div className="flex min-h-0 flex-1 flex-col items-center justify-center">
+                  {activeSummaryCard ? (
+                    <article
+                      key={activeSummaryCard.messageIndex}
+                      className="flex h-[20rem] w-full max-w-md shrink-0 flex-col overflow-hidden rounded-2xl border border-cyan-200/20 bg-gradient-to-br from-white/10 via-cyan-200/[0.06] to-indigo-300/[0.08] p-3 shadow-xl shadow-cyan-950/20 sm:h-[22rem] sm:p-4 lg:h-[24rem] lg:max-w-none"
+                      aria-label={`요약 카드 ${summaryCardIndex + 1}`}
+                    >
+                      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-white/10 pb-3">
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-100/65">
+                            {activeSummaryCard.role}
+                          </p>
+                          <p className="mt-1 text-xs font-semibold text-white/85">
+                            메시지 #{activeSummaryCard.messageIndex}
+                          </p>
+                        </div>
+                        <span className="rounded-full border border-cyan-200/15 bg-cyan-200/10 px-2.5 py-1 text-[10px] font-semibold text-cyan-50/80">
+                          Preview
+                        </span>
+                      </div>
+
+                      <div className="my-3 min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-xl border border-white/10 bg-slate-950/30 px-3 py-3 [scrollbar-color:rgba(103,232,249,0.35)_rgba(15,23,42,0.35)] [scrollbar-width:thin]">
+                        <p className="whitespace-pre-wrap break-words text-sm leading-6 text-white/90">
+                          {activeSummaryCard.content}
+                        </p>
+                      </div>
+
+                      <div className="grid shrink-0 grid-cols-2 gap-2">
                         <button
                           type="button"
                           onClick={() =>
-                            scrollToMessageIndex(card.messageIndex)
+                            scrollToMessageIndex(
+                              activeSummaryCard.messageIndex,
+                            )
                           }
-                          className="w-full text-left"
+                          className="min-h-11 rounded-xl border border-cyan-200/20 bg-cyan-300/10 px-2 py-2 text-xs font-bold text-cyan-50 transition hover:bg-cyan-300/20"
                         >
-                          <div className="text-[10px] font-semibold uppercase tracking-wide text-white/60">
-                            {card.role} • #{card.messageIndex}
-                          </div>
-                          <div className="mt-1 line-clamp-5 whitespace-pre-wrap text-xs leading-relaxed text-white/90">
-                            {card.content}
-                          </div>
+                          대화에서 보기
                         </button>
                         <button
                           type="button"
                           onClick={() =>
                             toggleBookmarkMutation.mutate({
-                              messageIndex: card.messageIndex,
+                              messageIndex: activeSummaryCard.messageIndex,
                               nextBookmarked: false,
                             })
                           }
-                          className="mt-2 rounded-md bg-white/10 px-2 py-1 text-[11px] font-semibold text-white/80 transition hover:bg-white/20"
+                          disabled={toggleBookmarkMutation.isPending}
+                          className="min-h-11 rounded-xl border border-white/10 bg-white/5 px-2 py-2 text-xs font-semibold text-white/75 transition hover:bg-white/10 hover:text-white disabled:cursor-wait disabled:opacity-45"
                         >
-                          Remove
+                          요약에서 제거
                         </button>
                       </div>
-                    ))
+                    </article>
+                  ) : (
+                    <div className="flex h-[20rem] w-full max-w-md items-center justify-center rounded-2xl border border-dashed border-white/15 bg-white/[0.04] px-6 text-center sm:h-[22rem] lg:h-[24rem] lg:max-w-none">
+                      <div>
+                        <p className="text-sm font-semibold text-white/80">
+                          북마크한 메시지가 없습니다.
+                        </p>
+                        <p className="mt-2 text-xs leading-5 text-white/50">
+                          대화 메시지의 별표 버튼을 누르면 이곳에서 요약
+                          카드로 확인할 수 있습니다.
+                        </p>
+                      </div>
+                    </div>
                   )}
+                </div>
+
+                <div className="mt-3 grid shrink-0 grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSummaryCardIndex((current) => current - 1)
+                    }
+                    disabled={summaryCardIndex <= 0}
+                    aria-label="이전 요약 카드"
+                    className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white transition hover:border-cyan-200/25 hover:bg-cyan-300/10 disabled:cursor-not-allowed disabled:opacity-25"
+                  >
+                    <ChevronLeft size={20} />
+                  </button>
+                  <div className="flex items-center justify-center gap-1.5 overflow-hidden">
+                    {summaryCards.map((card, index) => (
+                      <button
+                        key={card.messageIndex}
+                        type="button"
+                        onClick={() => setSummaryCardIndex(index)}
+                        aria-label={`${index + 1}번 요약 카드로 이동`}
+                        aria-current={
+                          index === summaryCardIndex ? 'true' : undefined
+                        }
+                        className={`h-2 rounded-full transition-all ${
+                          index === summaryCardIndex
+                            ? 'w-6 bg-cyan-300'
+                            : 'w-2 bg-white/25 hover:bg-white/45'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSummaryCardIndex((current) => current + 1)
+                    }
+                    disabled={
+                      summaryCards.length === 0 ||
+                      summaryCardIndex >= summaryCards.length - 1
+                    }
+                    aria-label="다음 요약 카드"
+                    className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white transition hover:border-cyan-200/25 hover:bg-cyan-300/10 disabled:cursor-not-allowed disabled:opacity-25"
+                  >
+                    <ChevronRight size={20} />
+                  </button>
                 </div>
               </div>
             </aside>
