@@ -65,15 +65,15 @@ export default function BranchZipPage() {
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-[#0c1424] via-[#0d1b33] to-[#0a1022] p-4 text-white md:p-8">
-      <section className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-[1600px] flex-col overflow-hidden rounded-3xl border border-white/15 bg-white/5 shadow-2xl backdrop-blur-xl">
-        <header className="flex items-start gap-4 border-b border-white/10 px-6 py-5">
+    <main className="min-h-[100dvh] bg-gradient-to-b from-[#0c1424] via-[#0d1b33] to-[#0a1022] p-0 pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] text-white sm:p-3 md:p-8">
+      <section className="mx-auto flex min-h-[100dvh] max-w-[1600px] flex-col overflow-hidden border border-white/15 bg-white/5 shadow-2xl backdrop-blur-xl sm:min-h-[calc(100dvh-1.5rem)] sm:rounded-3xl md:min-h-[calc(100dvh-4rem)]">
+        <header className="flex shrink-0 items-start gap-3 border-b border-white/10 px-3 py-4 sm:gap-4 sm:px-6 sm:py-5">
           <button
             type="button"
             onClick={() => router.push("/threads")}
             aria-label="스레드 목록으로 돌아가기"
             title="스레드 목록으로 돌아가기"
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/20 bg-white/5 text-xl font-semibold text-white transition hover:bg-white/10"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/20 bg-white/5 text-xl font-semibold text-white transition hover:bg-white/10"
           >
             <ArrowLeft size={19} />
           </button>
@@ -81,7 +81,7 @@ export default function BranchZipPage() {
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-cyan-200">
               브랜치 시각화
             </p>
-            <h1 className="mt-1 text-2xl font-bold text-white">branch-zip</h1>
+            <h1 className="mt-1 text-xl font-bold text-white sm:text-2xl">branch-zip</h1>
             <p className="mt-1 text-sm text-blue-100">
               Gemini 스레드가 분기된 흐름을 왼쪽에서 오른쪽으로 확인하세요.
             </p>
@@ -89,7 +89,7 @@ export default function BranchZipPage() {
         </header>
 
         <div className="grid min-h-0 flex-1 md:grid-cols-[300px_minmax(0,1fr)]">
-          <aside className="flex min-h-0 flex-col border-b border-white/10 bg-slate-950/25 p-4 md:border-b-0 md:border-r">
+          <aside className="flex h-56 min-h-0 flex-col border-b border-white/10 bg-slate-950/25 p-3 sm:p-4 md:h-auto md:border-b-0 md:border-r">
             <div className="flex items-center justify-between px-2">
               <h2 className="text-xs font-semibold tracking-[0.16em] text-blue-200">
                 루트 스레드
@@ -149,7 +149,7 @@ export default function BranchZipPage() {
                             current === root.id ? null : root.id,
                           )
                         }
-                        className={`flex min-w-0 flex-1 items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm font-semibold transition ${
+                        className={`flex min-h-12 min-w-0 flex-1 items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-sm font-semibold transition sm:gap-3 sm:px-4 sm:py-3 ${
                           isExpanded
                             ? "border-cyan-300/50 bg-cyan-400/15 text-white shadow-lg shadow-cyan-950/20"
                             : "border-white/10 bg-white/5 text-blue-50 hover:border-white/20 hover:bg-white/10"
@@ -176,7 +176,7 @@ export default function BranchZipPage() {
                           onClick={() => setDeleteRoot(root)}
                           aria-label={`${root.title || "제목 없는 스레드"} 폴더 삭제`}
                           title="폴더와 전체 브랜치 삭제"
-                          className="inline-flex w-10 shrink-0 items-center justify-center rounded-xl border border-rose-300/20 bg-rose-300/5 text-rose-200/70 transition hover:bg-rose-300/10 hover:text-rose-100"
+                          className="inline-flex w-11 shrink-0 items-center justify-center rounded-xl border border-rose-300/20 bg-rose-300/5 text-rose-200/70 transition hover:bg-rose-300/10 hover:text-rose-100"
                         >
                           <Trash2 size={15} />
                         </button>
@@ -188,9 +188,9 @@ export default function BranchZipPage() {
             </div>
           </aside>
 
-          <section className="min-h-[520px] min-w-0 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.12),transparent_42%)]">
+          <section className="min-h-[420px] min-w-0 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.12),transparent_42%)] sm:min-h-[520px]">
             {expandedRoot ? (
-              <div className="h-full min-h-[520px] overflow-hidden p-3 md:p-4">
+              <div className="h-full min-h-[420px] overflow-hidden p-2 sm:min-h-[520px] sm:p-3 md:p-4">
                 <BranchTree
                   root={expandedRoot}
                   token={token!}
@@ -199,7 +199,7 @@ export default function BranchZipPage() {
                 />
               </div>
             ) : (
-              <div className="flex h-full min-h-[520px] items-center justify-center p-8 text-center">
+              <div className="flex h-full min-h-[420px] items-center justify-center p-5 text-center sm:min-h-[520px] sm:p-8">
                 <div>
                   <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border border-cyan-300/20 bg-cyan-400/10">
                     <span className="h-0 w-0 border-y-[10px] border-l-[15px] border-y-transparent border-l-cyan-300" />
@@ -230,7 +230,7 @@ export default function BranchZipPage() {
       />
 
       {deleteSuccessOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 px-6 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto bg-black/40 p-3 pb-[max(.75rem,env(safe-area-inset-bottom))] pt-[max(.75rem,env(safe-area-inset-top))] backdrop-blur-sm sm:px-6">
           <div
             role="status"
             aria-live="polite"

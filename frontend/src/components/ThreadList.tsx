@@ -119,7 +119,7 @@ export function ThreadList({
             return (
               <article
                 key={thread.id}
-                className="flex min-h-40 flex-col rounded-2xl border border-white/10 bg-slate-950/35 p-4 shadow-lg transition hover:-translate-y-0.5 hover:border-cyan-300/35 hover:bg-slate-950/50"
+                className="flex min-h-40 flex-col rounded-2xl border border-white/10 bg-slate-950/35 p-3 shadow-lg transition hover:border-cyan-300/35 hover:bg-slate-950/50 sm:p-4 sm:hover:-translate-y-0.5"
               >
                 <div className="flex items-start gap-3">
                   <div
@@ -164,7 +164,7 @@ export function ThreadList({
                             onClick={() => void commitRename(thread.id)}
                             disabled={isRenaming}
                             aria-label="이름 저장"
-                            className="rounded-md p-1.5 text-emerald-300 hover:bg-emerald-300/10 disabled:opacity-50"
+                            className="flex h-9 w-9 items-center justify-center rounded-md text-emerald-300 hover:bg-emerald-300/10 disabled:opacity-50"
                           >
                             {isRenaming ? (
                               <span className="block h-4 w-4 animate-spin rounded-full border-2 border-emerald-300 border-t-transparent" />
@@ -177,7 +177,7 @@ export function ThreadList({
                             onClick={cancelRename}
                             disabled={isRenaming}
                             aria-label="이름 수정 취소"
-                            className="rounded-md p-1.5 text-white/45 hover:bg-white/10 disabled:opacity-50"
+                            className="flex h-9 w-9 items-center justify-center rounded-md text-white/45 hover:bg-white/10 disabled:opacity-50"
                           >
                             <X size={16} />
                           </button>
@@ -208,7 +208,7 @@ export function ThreadList({
                       onClick={() => startRename(thread)}
                       aria-label={`${thread.title || "Untitled"} 이름 수정`}
                       title="스레드 이름 수정"
-                      className="shrink-0 rounded-lg p-1.5 text-white/40 transition hover:bg-cyan-300/10 hover:text-cyan-200"
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/40 transition hover:bg-cyan-300/10 hover:text-cyan-200"
                     >
                       <Pencil size={15} />
                     </button>
@@ -223,7 +223,7 @@ export function ThreadList({
 
                 <div className="mt-auto pt-3">
                   {(onWorkspace || onDelete) && (
-                    <div className="mb-2 flex items-center gap-2">
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
                       {onWorkspace &&
                         (thread.is_workspace ||
                           thread.can_manage_workspace) && (
@@ -238,7 +238,7 @@ export function ThreadList({
                               setLoadingWorkspaceId(null);
                             }
                           }}
-                          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-indigo-300/15 bg-indigo-300/5 px-2 py-1.5 text-[10px] font-semibold text-indigo-100/75 transition hover:bg-indigo-300/10 disabled:opacity-50"
+                          className="inline-flex min-h-10 min-w-36 flex-1 items-center justify-center gap-1.5 rounded-lg border border-indigo-300/15 bg-indigo-300/5 px-2 py-2 text-[11px] font-semibold text-indigo-100/75 transition hover:bg-indigo-300/10 disabled:opacity-50"
                         >
                           {loadingWorkspaceId === thread.id ? (
                             <span className="h-3 w-3 animate-spin rounded-full border-2 border-indigo-200 border-t-transparent" />
@@ -254,7 +254,7 @@ export function ThreadList({
                         <button
                           type="button"
                           onClick={() => setDeleteTargetId(thread.id)}
-                          className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-300/15 bg-red-300/5 px-3 py-1.5 text-[10px] font-semibold text-red-200/75 transition hover:bg-red-300/10"
+                          className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-red-300/15 bg-red-300/5 px-3 py-2 text-[11px] font-semibold text-red-200/75 transition hover:bg-red-300/10"
                         >
                           <Trash2 size={12} />
                           삭제
@@ -266,9 +266,9 @@ export function ThreadList({
                   <button
                     type="button"
                     onClick={() => onSelect(thread.id)}
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-white/85 transition hover:border-cyan-300/30 hover:bg-cyan-300/10 hover:text-white"
+                    className="min-h-11 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-white/85 transition hover:border-cyan-300/30 hover:bg-cyan-300/10 hover:text-white"
                   >
-                    Open thread
+                    스레드 열기
                   </button>
                 </div>
               </article>

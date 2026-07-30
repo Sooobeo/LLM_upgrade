@@ -144,17 +144,17 @@ export default function ThreadsPage() {
   const queryClient = useQueryClient();
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#0c1424] via-[#0d1b33] to-[#0a1022] text-white">
-      <div className="mx-auto max-w-5xl px-4 py-12">
+    <div className="min-h-[100dvh] bg-gradient-to-b from-[#0c1424] via-[#0d1b33] to-[#0a1022] text-white">
+      <div className="mx-auto max-w-5xl px-2 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-4 sm:py-8 md:py-12">
         {/* ===== Glass Card ===== */}
-        <div className="rounded-3xl border border-white/15 bg-white/5 backdrop-blur-xl px-6 py-8 md:px-10 md:py-10">
+        <div className="rounded-2xl border border-white/15 bg-white/5 px-3 py-5 backdrop-blur-xl sm:rounded-3xl sm:px-6 sm:py-8 md:px-10 md:py-10">
           {/* ===== Header ===== */}
           <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-blue-200">
                 Chat archive
               </p>
-              <h1 className="text-3xl font-bold text-white md:text-4xl">
+              <h1 className="text-2xl font-bold text-white sm:text-3xl md:text-4xl">
                 Archived conversations
               </h1>
               <p className="text-sm text-blue-100">
@@ -162,29 +162,29 @@ export default function ThreadsPage() {
               </p>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
               <button
                 onClick={() => router.push("/branch-zip")}
-                className="rounded-xl border border-cyan-300/30 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-50 backdrop-blur transition hover:border-cyan-300/50 hover:bg-cyan-400/20"
+                className="min-h-11 rounded-xl border border-cyan-300/30 bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-50 backdrop-blur transition hover:border-cyan-300/50 hover:bg-cyan-400/20 sm:px-4"
               >
                 branch-zip
               </button>
               <button
                 onClick={logout}
-                className="rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/10"
+                className="min-h-11 rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/10 sm:px-4"
               >
                 Logout
               </button>
               <button
                 onClick={() => setIsModalOpen(true)}
-                className="rounded-xl bg-gradient-to-r from-blue-500 to-cyan-400 px-5 py-2 text-sm font-semibold text-white shadow transition hover:-translate-y-0.5 hover:shadow-lg"
+                className="col-span-2 min-h-11 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-400 px-5 py-2 text-sm font-semibold text-white shadow transition hover:shadow-lg sm:col-auto"
               >
                 New Thread
               </button>
             </div>
           </header>
 
-          <label className="mb-6 flex items-center gap-3 rounded-2xl border border-white/15 bg-slate-950/30 px-4 py-3 text-blue-100 shadow-inner transition focus-within:border-cyan-300/45 focus-within:bg-slate-950/45">
+          <label className="mb-5 flex min-h-12 items-center gap-3 rounded-2xl border border-white/15 bg-slate-950/30 px-3 py-2.5 text-blue-100 shadow-inner transition focus-within:border-cyan-300/45 focus-within:bg-slate-950/45 sm:mb-6 sm:px-4 sm:py-3">
             <Search size={18} className="shrink-0 text-cyan-200/70" />
             <input
               type="search"
@@ -220,7 +220,7 @@ export default function ThreadsPage() {
               </button>
             </div>
           ) : (
-            <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+            <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-3 backdrop-blur sm:p-6">
               {branchesError && (
                 <div className="mb-5 rounded-xl border border-amber-300/25 bg-amber-300/10 px-4 py-3 text-sm text-amber-100">
                   브랜치 폴더를 불러오지 못해 모든 스레드를 일반 목록으로 표시합니다.
@@ -381,11 +381,11 @@ export default function ThreadsPage() {
       )}
 
       {deleteSuccessOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 px-6 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-black/40 p-3 pb-[max(.75rem,env(safe-area-inset-bottom))] pt-[max(.75rem,env(safe-area-inset-top))] backdrop-blur-sm sm:px-6">
           <div
             role="status"
             aria-live="polite"
-            className="w-full max-w-sm rounded-2xl border border-emerald-300/30 bg-slate-950/95 p-6 text-white shadow-2xl"
+            className="my-auto w-full max-w-sm rounded-2xl border border-emerald-300/30 bg-slate-950/95 p-5 text-white shadow-2xl sm:p-6"
           >
             <p className="text-center text-base font-semibold">삭제되었습니다.</p>
             <div className="mt-5 flex justify-center">

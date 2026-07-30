@@ -75,14 +75,14 @@ export function BranchFolderList({
             onClick={() => setHelpOpen((current) => !current)}
             aria-label="브랜치 폴더 도움말"
             aria-expanded={helpOpen}
-            className="flex h-5 w-5 items-center justify-center rounded-full border border-amber-200/25 bg-amber-200/10 text-amber-100/70 transition hover:bg-amber-200/20 hover:text-amber-50"
+            className="flex h-8 w-8 items-center justify-center rounded-full border border-amber-200/25 bg-amber-200/10 text-amber-100/70 transition hover:bg-amber-200/20 hover:text-amber-50"
           >
             <HelpCircle size={13} />
           </button>
           {helpOpen && (
             <div
               role="status"
-              className="absolute left-7 top-0 z-40 w-56 rounded-xl border border-amber-200/25 bg-slate-950/95 px-3 pb-3 pt-8 text-xs text-amber-50 shadow-2xl backdrop-blur"
+              className="absolute left-0 top-10 z-40 w-[min(14rem,calc(100vw-3rem))] rounded-xl border border-amber-200/25 bg-slate-950/95 px-3 pb-3 pt-8 text-xs text-amber-50 shadow-2xl backdrop-blur sm:left-7 sm:top-0 sm:w-56"
             >
               <button
                 type="button"
@@ -98,13 +98,13 @@ export function BranchFolderList({
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid min-w-0 gap-4 sm:grid-cols-2">
         {roots.map((root) => {
           const nodes = flattenBranchTree(root);
           return (
             <article
               key={root.id}
-              className="group relative mt-2 overflow-visible rounded-2xl border border-amber-300/30 bg-gradient-to-br from-amber-300/15 via-orange-300/10 to-slate-950/35 p-4 shadow-lg shadow-amber-950/15 transition hover:-translate-y-0.5 hover:border-amber-200/60 hover:shadow-xl"
+              className="group relative mt-2 min-w-0 overflow-visible rounded-2xl border border-amber-300/30 bg-gradient-to-br from-amber-300/15 via-orange-300/10 to-slate-950/35 p-3 shadow-lg shadow-amber-950/15 transition hover:border-amber-200/60 hover:shadow-xl sm:p-4 sm:hover:-translate-y-0.5"
             >
               <span
                 aria-hidden="true"
@@ -206,11 +206,11 @@ export function BranchFolderList({
                 </div>
               </div>
 
-              <div className="mt-4 flex gap-2">
+              <div className="mt-4 flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => onOpen(root.id)}
-                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-amber-200/25 bg-amber-200/15 px-4 py-2 text-sm font-bold text-amber-50 transition hover:bg-amber-200/25"
+                  className="inline-flex min-h-11 min-w-24 flex-1 items-center justify-center gap-2 rounded-xl border border-amber-200/25 bg-amber-200/15 px-4 py-2 text-sm font-bold text-amber-50 transition hover:bg-amber-200/25"
                 >
                   <FolderOpen size={16} />
                   열기
@@ -220,7 +220,7 @@ export function BranchFolderList({
                     <button
                       type="button"
                       onClick={() => void onWorkspace(root)}
-                      className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-indigo-300/25 bg-indigo-300/10 px-3 py-2 text-xs font-bold text-indigo-100 transition hover:bg-indigo-300/20"
+                      className="inline-flex min-h-11 min-w-36 flex-1 items-center justify-center gap-1.5 rounded-xl border border-indigo-300/25 bg-indigo-300/10 px-3 py-2 text-xs font-bold text-indigo-100 transition hover:bg-indigo-300/20"
                     >
                       <Users size={14} />
                       {root.is_workspace ? "멤버 관리" : "워크스페이스로 전환"}
@@ -232,7 +232,7 @@ export function BranchFolderList({
                     onClick={() => setDeleteRootId(root.id)}
                     aria-label="브랜치 폴더 삭제"
                     title="루트와 전체 브랜치 삭제"
-                    className="inline-flex w-10 items-center justify-center rounded-xl border border-rose-300/20 bg-rose-300/5 text-rose-200/70 transition hover:bg-rose-300/10 hover:text-rose-100"
+                    className="ml-auto inline-flex h-11 w-11 items-center justify-center rounded-xl border border-rose-300/20 bg-rose-300/5 text-rose-200/70 transition hover:bg-rose-300/10 hover:text-rose-100 sm:ml-0"
                   >
                     <Trash2 size={15} />
                   </button>

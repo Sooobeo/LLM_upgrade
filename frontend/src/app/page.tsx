@@ -108,31 +108,31 @@ export default function LandingPage() {
   }
 
   return (
-      <main
+    <main
         ref={containerRef}
-        className="relative min-h-screen overflow-hidden bg-gradient-to-b from-[#0c1424] via-[#0d1b33] to-[#0a1022] text-white"
-      >      
+        className="relative h-[100dvh] min-h-[36rem] overflow-hidden bg-gradient-to-b from-[#0c1424] via-[#0d1b33] to-[#0a1022] text-white"
+      >
       {/* ===== Landing Slide ===== */}
       <div
-        className={`absolute inset-0 flex items-center justify-center px-6 transition-transform duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] ${
+        className={`absolute inset-0 flex items-center justify-center overflow-y-auto px-4 py-10 transition-transform duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] sm:px-6 ${
           showLogin ? "-translate-y-full" : "translate-y-0"
         }`}
       >
-        <div className="max-w-4xl text-center space-y-8">
+        <div className="max-w-4xl space-y-5 pb-16 text-center sm:space-y-8 sm:pb-0">
           <span className="inline-flex rounded-full border border-white/20 bg-white/5 px-4 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-blue-200 backdrop-blur">
             Conversation archive
           </span>
 
-          <h1 className="bg-gradient-to-r from-blue-300 via-white to-cyan-300 bg-clip-text pb-2 text-4xl font-extrabold leading-[1.18] text-transparent md:text-6xl md:leading-[1.16]">
+          <h1 className="bg-gradient-to-r from-blue-300 via-white to-cyan-300 bg-clip-text pb-2 text-3xl font-extrabold leading-[1.2] text-transparent sm:text-4xl md:text-6xl md:leading-[1.16]">
             llm upgrade: chat archiving
           </h1>
 
-          <p className="mx-auto max-w-2xl text-lg text-blue-100">
+          <p className="mx-auto max-w-2xl text-base leading-7 text-blue-100 sm:text-lg">
             흩어진 LLM 대화를 스레드로 보관하고, Gemini 브랜치를
             시각화해 생각의 흐름까지 한곳에 아카이빙하세요.
           </p>
 
-          <div className="flex justify-center gap-3 text-sm text-blue-100">
+          <div className="flex flex-wrap justify-center gap-2 text-xs text-blue-100 sm:gap-3 sm:text-sm">
             <span className="rounded-full border border-white/20 px-3 py-1">대화 아카이빙</span>
             <span className="rounded-full border border-white/20 px-3 py-1">브랜치 맵</span>
             <span className="rounded-full border border-white/20 px-3 py-1">안전한 접근</span>
@@ -142,7 +142,7 @@ export default function LandingPage() {
         <button
           aria-label="시작하기"
           onClick={() => setShowLogin(true)}
-          className="absolute bottom-10 inline-flex h-14 w-14 items-center justify-center rounded-full border border-white/30 bg-white/5 text-white backdrop-blur transition hover:-translate-y-1 hover:bg-white/10"
+          className="absolute bottom-[max(1.25rem,env(safe-area-inset-bottom))] inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/30 bg-white/5 text-white backdrop-blur transition hover:bg-white/10 sm:bottom-10 sm:h-14 sm:w-14"
           >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -159,16 +159,16 @@ export default function LandingPage() {
 
       {/* ===== Login Slide ===== */}
       <div
-        className={`absolute inset-0 flex items-center justify-center px-6 transition-transform duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] ${
+        className={`absolute inset-0 flex items-center justify-center overflow-y-auto overscroll-contain px-3 py-4 transition-transform duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] sm:px-6 ${
           showLogin ? "translate-y-0" : "translate-y-full"
         }`}
       >
-        <div className="relative w-full max-w-5xl overflow-hidden rounded-3xl border border-white/15 bg-white/5 backdrop-blur-xl">
+        <div className="relative my-auto w-full max-w-5xl overflow-hidden rounded-2xl border border-white/15 bg-white/5 backdrop-blur-xl sm:rounded-3xl">
           <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-cyan-400/10" />
 
           <div className="relative grid md:grid-cols-2">
             {/* Left */}
-            <div className="flex flex-col justify-center space-y-6 px-8 py-10 md:px-12 md:py-14">
+            <div className="hidden flex-col justify-center space-y-6 px-8 py-10 md:flex md:px-12 md:py-14">
               <p className="text-sm font-semibold uppercase tracking-[0.25em] text-blue-100">
                 Archive access
               </p>
@@ -188,24 +188,26 @@ export default function LandingPage() {
             </div>
 
             {/* Right */}
-            <div className="relative bg-white text-slate-900 md:rounded-l-3xl">
+            <div className="relative rounded-2xl bg-white text-slate-900 md:rounded-l-3xl md:rounded-r-none">
               <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-600 via-indigo-500 to-cyan-400" />
 
-              <div className="flex flex-col gap-6 px-8 py-10 md:px-10 md:py-14">
+              <div className="flex flex-col gap-5 px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-16 sm:px-8 sm:py-10 md:px-10 md:py-14">
                 <div>
-                  <br/>
-                  <h3 className="text-2xl font-semibold">Chat Archiving 계정</h3>
+                  <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-blue-600 md:hidden">
+                    llm upgrade: chat archiving
+                  </p>
+                  <h3 className="text-xl font-semibold sm:text-2xl">Chat Archiving 계정</h3>
                   <p className="text-sm text-slate-600">
                     대화 아카이브에 안전하게 접속하세요.
                   </p>
                 </div>
 
-                <div className="block mt-2 mb-5 flex flex-col gap-3">
+                <div className="mt-2 flex flex-col gap-3 sm:mb-5">
                   <button
                     onClick={handleGoogleLogin}
                     disabled={googleLoginLoading}
                     aria-busy={googleLoginLoading}
-                    className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold shadow transition hover:-translate-y-0.5 hover:shadow-md disabled:cursor-wait disabled:opacity-70 disabled:hover:translate-y-0"
+                    className="flex min-h-12 w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold shadow transition hover:shadow-md disabled:cursor-wait disabled:opacity-70 sm:px-4"
                   >
                     <svg
                       className="h-5 w-5"
@@ -254,7 +256,7 @@ export default function LandingPage() {
 
                   <button
                     onClick={() => router.push("/threads")}
-                    className="rounded-xl bg-[#0d1b33] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#0f223e]"
+                    className="min-h-12 rounded-xl bg-[#0d1b33] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#0f223e]"
                   >
                     이메일 계정으로 아카이브 열기
                   </button>
@@ -266,7 +268,7 @@ export default function LandingPage() {
               <button
                 aria-label="메인으로 돌아가기"
                 onClick={() => setShowLogin(false)}
-                className="absolute left-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full border bg-white text-slate-700 shadow transition hover:scale-105"
+                className="absolute left-4 top-4 inline-flex h-11 w-11 items-center justify-center rounded-full border bg-white text-slate-700 shadow transition hover:scale-105"
               >
                 ＜
               </button>

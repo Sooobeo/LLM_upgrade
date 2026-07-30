@@ -40,7 +40,7 @@ type BookmarkToggleVars = {
 
 function ChatLoading({ label }: { label: string }) {
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-gradient-to-b from-[#0c1424] via-[#0d1b33] to-[#0a1022] px-6 text-white">
+    <div className="fixed inset-0 flex items-center justify-center bg-gradient-to-b from-[#0c1424] via-[#0d1b33] to-[#0a1022] px-4 text-white">
       <div
         role="status"
         aria-live="polite"
@@ -682,17 +682,18 @@ export function ChatView() {
 
   return (
     <div
-      className={`fixed inset-0 overflow-hidden bg-gradient-to-b from-[#0c1424] via-[#0d1b33] to-[#0a1022] text-white ${
-        isWorkspace ? 'bg-indigo-50 p-2 rounded-2xl' : ''
+      className={`fixed inset-0 min-w-0 overflow-hidden bg-gradient-to-b from-[#0c1424] via-[#0d1b33] to-[#0a1022] text-white ${
+        isWorkspace ? 'ring-1 ring-inset ring-indigo-300/15' : ''
       }`}
     >
-      <div className="mx-auto flex h-full max-w-6xl flex-col gap-4 p-6 md:p-10">
-        <header className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-lg backdrop-blur">
-          <div className="flex flex-wrap items-center justify-between gap-3 p-2">
-            <div className="flex items-center gap-3">
+      <div className="mx-auto flex h-[100dvh] max-w-6xl flex-col gap-2 p-2 pb-[max(.5rem,env(safe-area-inset-bottom))] pt-[max(.5rem,env(safe-area-inset-top))] sm:gap-4 sm:p-4 md:p-10">
+        <header className="shrink-0 rounded-2xl border border-white/10 bg-white/5 p-2 shadow-lg backdrop-blur sm:p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3 p-1 sm:items-center sm:p-2">
+            <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
               <button
                 onClick={() => router.push('/threads')}
-                className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-sm font-semibold text-white/80 hover:bg-white/10"
+                aria-label="스레드 목록으로 돌아가기"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-sm font-semibold text-white/80 hover:bg-white/10"
               >
                 ←
               </button>
@@ -719,7 +720,7 @@ export function ChatView() {
                           }
                         }}
                         aria-label="스레드명 수정"
-                        className="w-64 max-w-[45vw] rounded-lg border border-cyan-300/30 bg-white/5 px-2.5 py-1 text-base font-bold text-white outline-none focus:ring-2 focus:ring-cyan-300/40"
+                        className="w-full min-w-0 max-w-64 rounded-lg border border-cyan-300/30 bg-white/5 px-2.5 py-1 text-base font-bold text-white outline-none focus:ring-2 focus:ring-cyan-300/40"
                       />
                       <button
                         type="button"
@@ -753,7 +754,7 @@ export function ChatView() {
                   </div>
                 ) : (
                   <div className="flex min-w-0 items-center gap-2">
-                    <h1 className="max-w-md truncate text-xl font-bold text-white/90">
+                    <h1 className="max-w-[58vw] truncate text-base font-bold text-white/90 sm:max-w-md sm:text-xl">
                       {title || 'Untitled'}
                     </h1>
                     {data?.can_rename && (
@@ -776,8 +777,8 @@ export function ChatView() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <label className="text-xs font-semibold text-white/60">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+              <label className="hidden text-xs font-semibold text-white/60 sm:block">
                 Model
               </label>
               <select
@@ -786,7 +787,7 @@ export function ChatView() {
                   setSelectedModel(e.target.value);
                   setModel(threadId, e.target.value);
                 }}
-                className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-sm text-white focus:outline-none"
+                className="min-h-10 min-w-0 flex-1 rounded-lg border border-white/10 bg-slate-900/80 px-2 py-1 text-sm text-white focus:outline-none sm:flex-none"
               >
                 {MODEL_OPTIONS.map((m) => (
                   <option key={m} value={m} className="text-black">
@@ -795,17 +796,16 @@ export function ChatView() {
                 ))}
               </select>
               {selectedModel === 'gemini-2.5-flash' && (
-                <span className="text-[10px] text-amber-200">
+                <span className="hidden text-[10px] text-amber-200 sm:inline">
                   최신 Flash 호환 실행
                 </span>
               )}
               <button
                 type="button"
                 onClick={() => setIsSummaryOpen((prev) => !prev)}
-                className="rounded-lg border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold text-white/80 transition hover:bg-white/10"
+                className="min-h-10 flex-1 rounded-lg border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold text-white/80 transition hover:bg-white/10 sm:flex-none"
               >
-                {isSummaryOpen ? 'Hide Summary Card' : 'Show Summary Card'} (
-                {bookmarkRows.length})
+                {isSummaryOpen ? '요약 닫기' : '요약 카드'} ({bookmarkRows.length})
               </button>
             </div>
           </div>
@@ -821,7 +821,7 @@ export function ChatView() {
                 type="button"
                 onClick={() => branchMutation.mutate()}
                 disabled={branchMutation.isPending || chatMutation.isPending}
-                className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/30 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:border-cyan-200/60 hover:bg-cyan-400/20 disabled:cursor-wait disabled:opacity-60"
+                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-cyan-300/30 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:border-cyan-200/60 hover:bg-cyan-400/20 disabled:cursor-wait disabled:opacity-60 sm:w-auto"
               >
                 <GitBranch
                   size={16}
@@ -844,12 +844,12 @@ export function ChatView() {
         </header>
 
         <div
-          className={`flex-1 min-h-0 ${isSummaryOpen ? 'grid grid-cols-1 gap-4 lg:grid-cols-4' : 'flex flex-col gap-4'}`}
+          className={`relative min-h-0 flex-1 ${isSummaryOpen ? 'flex flex-col gap-2 lg:grid lg:grid-cols-4 lg:gap-4' : 'flex flex-col gap-2 sm:gap-4'}`}
         >
           <div
-            className={`${isSummaryOpen ? 'lg:col-span-3 flex min-h-0 flex-col gap-4' : 'flex min-h-0 flex-1 flex-col gap-4'}`}
+            className={`${isSummaryOpen ? 'flex min-h-0 flex-1 flex-col gap-2 lg:col-span-3 lg:gap-4' : 'flex min-h-0 flex-1 flex-col gap-2 sm:gap-4'}`}
           >
-            <div className="flex-1 overflow-y-auto rounded-2xl border border-white/10 bg-white/5 p-4 shadow-lg backdrop-blur">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-2xl border border-white/10 bg-white/5 p-3 shadow-lg backdrop-blur sm:p-4">
               <div className="space-y-4">
                 {branchContextPreview && (
                   <div
@@ -883,7 +883,7 @@ export function ChatView() {
                       className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
                       <div
-                        className={`relative max-w-[75%] rounded-2xl px-4 py-3 pr-10 text-sm shadow-md ${
+                        className={`relative max-w-[92%] overflow-hidden rounded-2xl px-3 py-3 pr-9 text-sm shadow-md sm:max-w-[75%] sm:px-4 sm:pr-10 ${
                           m.role === 'user'
                             ? 'bg-blue-600 text-white'
                             : 'bg-white/10 text-white/90'
@@ -915,7 +915,7 @@ export function ChatView() {
                         <div className="text-[11px] uppercase tracking-wide opacity-60">
                           {m.role}
                         </div>
-                        <div className="mt-1 whitespace-pre-wrap leading-relaxed">
+                        <div className="mt-1 whitespace-pre-wrap break-words leading-relaxed">
                           {m.content}
                         </div>
 
@@ -1026,13 +1026,13 @@ export function ChatView() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-lg backdrop-blur">
-              <div className="flex items-start gap-3">
+            <div className="shrink-0 rounded-2xl border border-white/10 bg-white/5 p-3 shadow-lg backdrop-blur sm:p-4">
+              <div className="flex items-end gap-2 sm:items-start sm:gap-3">
                 <textarea
                   value={composer}
                   onChange={(e) => setComposer(e.target.value)}
                   placeholder="Type a message"
-                  className="min-h-[64px] flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  className="min-h-[56px] min-w-0 flex-1 resize-none rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400 sm:min-h-[64px]"
                 />
                 <div className="relative shrink-0 overflow-hidden rounded-xl p-[2px]">
                   {chatMutation.isPending && (
@@ -1044,7 +1044,7 @@ export function ChatView() {
                   <button
                     onClick={handleSend}
                     disabled={chatMutation.isPending}
-                    className="relative z-10 h-11 rounded-[10px] bg-blue-600 px-4 text-sm font-semibold text-white shadow-md transition hover:bg-blue-700 disabled:cursor-wait"
+                    className="relative z-10 h-12 rounded-[10px] bg-blue-600 px-3 text-sm font-semibold text-white shadow-md transition hover:bg-blue-700 disabled:cursor-wait sm:px-4"
                   >
                     {chatMutation.isPending ? 'Sending...' : 'Send'}
                   </button>
@@ -1072,15 +1072,25 @@ export function ChatView() {
           </div>
 
           {isSummaryOpen && (
-            <aside className="min-h-0 lg:col-span-1">
-              <div className="flex h-full min-h-0 flex-col rounded-2xl border border-white/10 bg-white/5 p-4 shadow-lg backdrop-blur">
+            <aside className="absolute inset-0 z-40 min-h-0 lg:static lg:col-span-1">
+              <div className="flex h-full min-h-0 flex-col rounded-2xl border border-white/15 bg-slate-950/95 p-4 shadow-2xl backdrop-blur lg:bg-white/5 lg:shadow-lg">
                 <div className="mb-3 flex items-center justify-between">
                   <h2 className="text-sm font-semibold text-white/90">
                     Summary Card
                   </h2>
-                  <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-white/80">
-                    {summaryCards.length}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-white/80">
+                      {summaryCards.length}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsSummaryOpen(false)}
+                      aria-label="요약 카드 닫기"
+                      className="flex h-11 w-11 items-center justify-center rounded-lg text-white/65 hover:bg-white/10 hover:text-white lg:hidden"
+                    >
+                      <X size={17} />
+                    </button>
+                  </div>
                 </div>
 
                 {bookmarkError && (

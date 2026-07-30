@@ -85,8 +85,8 @@ export function NewThreadModal({ isOpen, onClose, onCreated, token }: Props) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur">
-      <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto overscroll-contain bg-black/50 p-3 pb-[max(.75rem,env(safe-area-inset-bottom))] pt-[max(.75rem,env(safe-area-inset-top))] backdrop-blur">
+      <div className="relative my-auto max-h-[calc(100dvh-1.5rem)] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl sm:p-6">
         <div className="mb-4 flex items-center justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">New Thread</p>
@@ -137,14 +137,14 @@ export function NewThreadModal({ isOpen, onClose, onCreated, token }: Props) {
               </div>
               <div className="flex justify-end gap-2">
                 <button
-                  className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100"
+                  className="min-h-11 rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100"
                   onClick={onClose}
                 >
                   Cancel
                 </button>
                 <button
                   disabled={!canProceed}
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition disabled:opacity-50"
+                  className="min-h-11 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition disabled:opacity-50"
                   onClick={() => setStep(2)}
                 >
                   Next
@@ -191,7 +191,7 @@ export function NewThreadModal({ isOpen, onClose, onCreated, token }: Props) {
                     <button
                       key={m}
                       onClick={() => setModel(m)}
-                      className={`rounded-xl border px-3 py-3 text-sm font-semibold transition ${
+                    className={`min-h-12 rounded-xl border px-3 py-3 text-sm font-semibold transition ${
                         model === m
                           ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm"
                           : "border-slate-200 bg-white text-slate-800 hover:border-blue-200"
@@ -213,14 +213,14 @@ export function NewThreadModal({ isOpen, onClose, onCreated, token }: Props) {
 
               <div className="flex justify-between gap-2">
                 <button
-                  className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100"
+                  className="min-h-11 rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100"
                   onClick={() => setStep(1)}
                 >
                   Back
                 </button>
                 <button
                   disabled={createMutation.isPending}
-                  className="flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition disabled:opacity-60"
+                  className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition disabled:opacity-60"
                   onClick={() => createMutation.mutate()}
                 >
                   {createMutation.isPending && (

@@ -9,7 +9,7 @@ type Props = {
 export function WorkspaceCommentInput({ onAdd }: Props) {
   const [value, setValue] = useState("");
   return (
-    <div className="flex gap-2">
+    <div className="flex flex-col gap-2 sm:flex-row">
       <input
         value={value}
         onChange={(e) => setValue(e.target.value)}
@@ -23,7 +23,7 @@ export function WorkspaceCommentInput({ onAdd }: Props) {
           }
         }}
         placeholder="코멘트 추가"
-        className="flex-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-white placeholder:text-white/40 focus:outline-none focus:ring-1 focus:ring-blue-400"
+        className="min-h-10 min-w-0 flex-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-white placeholder:text-white/40 focus:outline-none focus:ring-1 focus:ring-blue-400"
       />
       <button
         type="button"
@@ -34,7 +34,7 @@ export function WorkspaceCommentInput({ onAdd }: Props) {
           setValue("");
         }}
         disabled={!value.trim()}
-        className="rounded-lg bg-blue-500 px-2 py-1 text-xs font-semibold text-white hover:bg-blue-600"
+        className="min-h-10 rounded-lg bg-blue-500 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-600 sm:min-h-0"
       >
         추가
       </button>

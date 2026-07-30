@@ -61,12 +61,12 @@ export function WorkspaceModal({ threadId, onClose, onSuccess }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-      <div className="w-full max-w-md rounded-2xl border border-white/15 bg-slate-900 p-6 text-white shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto overscroll-contain bg-black/50 p-3 pb-[max(.75rem,env(safe-area-inset-bottom))] pt-[max(.75rem,env(safe-area-inset-top))]">
+      <div className="my-auto max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-white/15 bg-slate-900 p-4 text-white shadow-2xl sm:p-6">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold">워크스페이스로 전환하기</h3>
-            <button type="button" onClick={onClose} className="text-sm text-blue-100 hover:text-white">
+            <button type="button" onClick={onClose} className="min-h-10 px-2 text-sm text-blue-100 hover:text-white">
               닫기
             </button>
           </div>
@@ -79,12 +79,12 @@ export function WorkspaceModal({ threadId, onClose, onSuccess }: Props) {
               value={emailInput}
               onChange={(e) => setEmailInput(e.target.value)}
               placeholder="user@example.com"
-              className="flex-1 rounded-xl border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white focus:border-blue-400 focus:outline-none"
+              className="min-h-12 min-w-0 flex-1 rounded-xl border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white focus:border-blue-400 focus:outline-none"
             />
             <button
               type="button"
               onClick={addEmail}
-              className="rounded-xl bg-white/10 px-3 py-2 text-sm font-semibold text-white hover:bg-white/20"
+              className="min-h-12 rounded-xl bg-white/10 px-3 py-2 text-sm font-semibold text-white hover:bg-white/20"
             >
               추가
             </button>
@@ -115,14 +115,14 @@ export function WorkspaceModal({ threadId, onClose, onSuccess }: Props) {
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl border border-white/15 px-4 py-2 text-sm text-white hover:bg-white/10"
+              className="min-h-11 rounded-xl border border-white/15 px-4 py-2 text-sm text-white hover:bg-white/10"
             >
               취소
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-blue-600/30 hover:bg-blue-500 disabled:opacity-60"
+              className="min-h-11 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-blue-600/30 hover:bg-blue-500 disabled:opacity-60"
             >
               {submitting ? "처리 중..." : "워크스페이스 만들기"}
             </button>

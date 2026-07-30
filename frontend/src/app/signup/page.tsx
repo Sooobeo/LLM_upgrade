@@ -46,13 +46,13 @@ export default function SignupPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-[#0c1424] via-[#0d1b33] to-[#0a1022] px-6 py-10 text-white">
-      <div className="mx-auto flex min-h-[80vh] max-w-5xl flex-col gap-10 md:flex-row md:items-center md:justify-between">
+    <main className="min-h-[100dvh] bg-gradient-to-b from-[#0c1424] via-[#0d1b33] to-[#0a1022] px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))] text-white sm:px-6 sm:py-10">
+      <div className="mx-auto flex min-h-[80dvh] max-w-5xl flex-col gap-7 md:flex-row md:items-center md:justify-between md:gap-10">
         <div className="space-y-4 text-left md:max-w-lg">
           <p className="inline-flex items-center rounded-full bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-blue-200">
             Join LLM Workspace
           </p>
-          <h1 className="text-4xl font-bold md:text-5xl">시작할 준비가 되셨나요?</h1>
+          <h1 className="text-3xl font-bold sm:text-4xl md:text-5xl">시작할 준비가 되셨나요?</h1>
           <p className="text-sm text-blue-100 md:text-base">
             계정을 만들어 대화 기록을 저장하고, 검색하고, 워크플로를 이어가세요. 구글 로그인과 비밀번호 로그인을 모두 지원합니다.
           </p>
@@ -66,7 +66,7 @@ export default function SignupPage() {
           </Link>
         </div>
 
-        <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-8 shadow-2xl backdrop-blur">
+        <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-5 shadow-2xl backdrop-blur sm:p-8">
           <div className="mb-6 space-y-2">
             <h2 className="text-2xl font-semibold text-white">회원가입</h2>
             <p className="text-sm text-blue-100">필수 정보를 입력해 계정을 만들어주세요.</p>
@@ -76,7 +76,7 @@ export default function SignupPage() {
             <div className="space-y-2">
               <label className="block text-sm text-blue-100">닉네임</label>
               <input
-                className="w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm text-white placeholder:text-blue-200 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200/40"
+                className="min-h-12 w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm text-white placeholder:text-blue-200 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200/40"
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
                 placeholder="팀에서 보여질 이름"
@@ -87,7 +87,7 @@ export default function SignupPage() {
             <div className="space-y-2">
               <label className="block text-sm text-blue-100">이메일</label>
               <input
-                className="w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm text-white placeholder:text-blue-200 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200/40"
+                className="min-h-12 w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm text-white placeholder:text-blue-200 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200/40"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@example.com"
@@ -99,7 +99,7 @@ export default function SignupPage() {
             <div className="space-y-2">
               <label className="block text-sm text-blue-100">비밀번호</label>
               <input
-                className="w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm text-white placeholder:text-blue-200 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200/40"
+                className="min-h-12 w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm text-white placeholder:text-blue-200 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200/40"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="영문, 숫자 조합 권장"

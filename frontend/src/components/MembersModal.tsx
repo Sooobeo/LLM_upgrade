@@ -51,8 +51,8 @@ export function MembersModal({ threadId, onClose }: Props) {
   }, [threadId]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-      <div className="w-full max-w-md rounded-2xl border border-white/15 bg-slate-900 p-6 text-white shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-3 pb-[max(.75rem,env(safe-area-inset-bottom))] pt-[max(.75rem,env(safe-area-inset-top))]">
+      <div className="my-auto max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-white/15 bg-slate-900 p-4 text-white shadow-2xl sm:p-6">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold">멤버 보기</h3>
           <button type="button" onClick={onClose} className="text-sm text-blue-100 hover:text-white">

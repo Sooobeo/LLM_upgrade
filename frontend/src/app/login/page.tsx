@@ -57,8 +57,8 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 px-4">
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-8 text-white shadow-2xl backdrop-blur">
+    <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 px-3 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))] sm:px-4">
+      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-5 text-white shadow-2xl backdrop-blur sm:p-8">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-200">
           llm upgrade: chat archiving
         </p>
@@ -75,7 +75,7 @@ export default function LoginPage() {
               autoComplete="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm text-white focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              className="mt-1 min-h-12 w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm text-white focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-200"
               placeholder="name@example.com"
             />
           </label>
@@ -87,7 +87,7 @@ export default function LoginPage() {
               autoComplete="current-password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm text-white focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              className="mt-1 min-h-12 w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm text-white focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-200"
               placeholder="••••••••"
             />
           </label>
@@ -95,13 +95,13 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-lg bg-blue-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-600 disabled:opacity-50"
+            className="min-h-12 w-full rounded-lg bg-blue-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-600 disabled:opacity-50"
           >
             {loading ? "아카이브를 여는 중..." : "로그인하고 아카이브 열기"}
           </button>
         </form>
       </div>
-      <button onClick={() => router.push("/")} className="mt-4 text-xs text-blue-200/70 hover:text-white">
+      <button onClick={() => router.push("/")} className="mt-4 min-h-11 px-3 text-xs text-blue-200/70 hover:text-white">
         ← 처음 화면으로
       </button>
     </div>

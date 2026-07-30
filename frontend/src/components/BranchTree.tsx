@@ -680,11 +680,48 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
 
   const selectedComment =
     comments.find((comment) => comment.id === selectedCommentId) || null;
+  const selectedCommentPanelPosition = selectedComment
+    ? (() => {
+        const panelWidth = 230;
+        const panelEstimatedHeight = 250;
+        const margin = 8;
+        const canvasLeft =
+          (viewportSize.width - layout.width * renderScale) / 2;
+        const canvasTop =
+          (viewportSize.height - layout.height * renderScale) / 2;
+        const anchorX =
+          canvasLeft + selectedComment.position_x * renderScale;
+        const anchorY =
+          canvasTop + selectedComment.position_y * renderScale;
+        const rightCandidate = anchorX + 16 * renderScale;
+        const desiredLeft =
+          rightCandidate + panelWidth <= viewportSize.width - margin
+            ? rightCandidate
+            : anchorX - 16 * renderScale - panelWidth;
+        const screenLeft = clamp(
+          desiredLeft,
+          margin,
+          Math.max(margin, viewportSize.width - panelWidth - margin),
+        );
+        const screenTop = clamp(
+          anchorY - 16 * renderScale,
+          margin,
+          Math.max(
+            margin,
+            viewportSize.height - panelEstimatedHeight - margin,
+          ),
+        );
+        return {
+          left: (screenLeft - canvasLeft) / renderScale,
+          top: (screenTop - canvasTop) / renderScale,
+        };
+      })()
+    : null;
 
   return (
     <div
       ref={viewportRef}
-      className="relative h-[calc(100vh-15rem)] min-h-[520px] w-full touch-none select-none overflow-hidden rounded-2xl border border-cyan-300/15 bg-slate-950/45 shadow-inner shadow-cyan-950/30"
+      className="relative h-[min(65dvh,36rem)] min-h-[420px] w-full touch-none select-none overflow-hidden rounded-xl border border-cyan-300/15 bg-slate-950/45 shadow-inner shadow-cyan-950/30 sm:h-[calc(100dvh-15rem)] sm:min-h-[520px] sm:rounded-2xl"
       role="tree"
       aria-label={`${root.title || "제목 없는 스레드"} 브랜치 트리`}
       onPointerDown={startCanvasPointer}
@@ -695,14 +732,14 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
       <div
         aria-label="화면 배율 조절"
         title="버튼 또는 두 손가락 제스처로 확대·축소"
-        className="absolute right-3 top-3 z-30 flex items-center gap-1 rounded-xl border border-white/10 bg-slate-950/85 p-1.5 text-xs font-semibold text-white shadow-lg backdrop-blur"
+        className="absolute right-2 top-2 z-30 flex items-center gap-1 rounded-xl border border-white/10 bg-slate-950/85 p-1 text-xs font-semibold text-white shadow-lg backdrop-blur sm:right-3 sm:top-3 sm:p-1.5"
       >
         <button
           type="button"
           onClick={() => setZoom((current) => Math.max(0.6, current - 0.2))}
           disabled={zoom <= 0.6}
           aria-label="축소"
-          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-base transition hover:bg-white/10 disabled:opacity-30"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-base transition hover:bg-white/10 disabled:opacity-30"
         >
           −
         </button>
@@ -714,7 +751,7 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
           onClick={() => setZoom((current) => Math.min(2, current + 0.2))}
           disabled={zoom >= 2}
           aria-label="확대"
-          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-base transition hover:bg-white/10 disabled:opacity-30"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-base transition hover:bg-white/10 disabled:opacity-30"
         >
           +
         </button>
@@ -724,13 +761,14 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
             setZoom(1);
             setPositions(layout.initialPositions);
           }}
-          className="rounded-lg border border-white/15 px-2.5 py-1.5 text-[11px] text-white/80 transition hover:bg-white/10"
+          className="min-h-9 rounded-lg border border-white/15 px-2 py-1.5 text-[10px] text-white/80 transition hover:bg-white/10 sm:px-2.5 sm:text-[11px]"
         >
-          화면 맞춤
+          <span className="sm:hidden">맞춤</span>
+          <span className="hidden sm:inline">화면 맞춤</span>
         </button>
       </div>
 
-      <div className="pointer-events-none absolute bottom-3 left-3 z-30 rounded-full border border-white/10 bg-slate-950/75 px-3 py-1.5 text-[10px] font-medium text-cyan-100/80 backdrop-blur">
+      <div className="pointer-events-none absolute bottom-2 left-2 z-30 max-w-[calc(100%-1rem)] truncate rounded-full border border-white/10 bg-slate-950/75 px-2.5 py-1.5 text-[10px] font-medium text-cyan-100/80 backdrop-blur sm:bottom-3 sm:left-3 sm:px-3">
         {layout.edges.length}개 브랜치 · {comments.length}개 코멘트
         {commentsLoading ? " · 불러오는 중" : ""}
       </div>
@@ -738,7 +776,7 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
       {commentError && (
         <div
           role="alert"
-          className="absolute bottom-3 left-1/2 z-[70] flex max-w-[min(560px,80%)] -translate-x-1/2 items-center gap-3 rounded-xl border border-rose-300/30 bg-rose-950/95 px-4 py-3 text-xs text-rose-100 shadow-2xl"
+          className="absolute inset-x-2 bottom-2 z-[70] flex items-center gap-3 rounded-xl border border-rose-300/30 bg-rose-950/95 px-3 py-3 text-xs text-rose-100 shadow-2xl sm:inset-x-auto sm:bottom-3 sm:left-1/2 sm:max-w-[min(560px,80%)] sm:-translate-x-1/2 sm:px-4"
         >
           <span className="min-w-0 flex-1 break-words">{commentError}</span>
           <button
@@ -1011,11 +1049,10 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
             aria-label="노드 코멘트"
             className="absolute z-50 w-[230px] rounded-2xl border border-amber-200/35 bg-slate-950/95 p-3 text-white shadow-2xl shadow-amber-950/50 backdrop-blur"
             style={{
-              left:
-                selectedComment.position_x > layout.width - 250
-                  ? selectedComment.position_x - 244
-                  : selectedComment.position_x + 16,
-              top: clamp(selectedComment.position_y - 16, 8, layout.height - 190),
+              left: selectedCommentPanelPosition?.left,
+              top: selectedCommentPanelPosition?.top,
+              transform: `scale(${1 / renderScale})`,
+              transformOrigin: "left top",
             }}
             onPointerDown={(event) => event.stopPropagation()}
           >
@@ -1106,14 +1143,14 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
 
       {createTargetId && (
         <div
-          className="absolute inset-0 z-[80] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm"
+          className="absolute inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-slate-950/65 p-3 backdrop-blur-sm sm:p-4"
           role="presentation"
         >
           <section
             role="dialog"
             aria-modal="true"
             aria-labelledby="branch-comment-title"
-            className="w-full max-w-md rounded-2xl border border-amber-200/25 bg-[#111b2e] p-5 shadow-2xl shadow-black/60"
+            className="my-auto max-h-[calc(100%-1rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-amber-200/25 bg-[#111b2e] p-4 shadow-2xl shadow-black/60 sm:p-5"
           >
             <h2
               id="branch-comment-title"

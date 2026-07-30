@@ -132,14 +132,14 @@ export default function ThreadFolderPage() {
   };
 
   return (
-    <main className="h-screen overflow-hidden bg-gradient-to-b from-[#0c1424] via-[#0d1b33] to-[#0a1022] px-4 py-6 text-white md:px-8">
+    <main className="h-[100dvh] overflow-x-hidden overflow-y-auto bg-gradient-to-b from-[#0c1424] via-[#0d1b33] to-[#0a1022] px-2 pb-[max(.5rem,env(safe-area-inset-bottom))] pt-[max(.5rem,env(safe-area-inset-top))] text-white sm:overflow-hidden sm:px-4 sm:py-4 md:px-8 md:py-6">
       <section className="mx-auto flex h-full max-w-6xl flex-col">
-        <header className="mb-5 flex shrink-0 items-start gap-4">
+        <header className="mb-3 flex shrink-0 items-start gap-2 sm:mb-5 sm:gap-4">
           <button
             type="button"
             onClick={() => router.push("/threads")}
             aria-label="스레드 목록으로 돌아가기"
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-white transition hover:bg-white/10"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-white transition hover:bg-white/10"
           >
             <ArrowLeft size={19} />
           </button>
@@ -147,8 +147,8 @@ export default function ThreadFolderPage() {
             <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-amber-200/75">
               브랜치 폴더
             </p>
-            <h1 className="mt-1 text-2xl font-bold">폴더 스레드</h1>
-            <label className="mt-3 flex max-w-2xl items-center gap-3 rounded-2xl border border-white/15 bg-slate-950/30 px-4 py-2.5 text-blue-100 shadow-inner transition focus-within:border-cyan-300/45 focus-within:bg-slate-950/45">
+            <h1 className="mt-1 text-xl font-bold sm:text-2xl">폴더 스레드</h1>
+            <label className="mt-2 flex min-h-11 max-w-2xl items-center gap-2 rounded-xl border border-white/15 bg-slate-950/30 px-3 py-2 text-blue-100 shadow-inner transition focus-within:border-cyan-300/45 focus-within:bg-slate-950/45 sm:mt-3 sm:gap-3 sm:rounded-2xl sm:px-4 sm:py-2.5">
               <Search size={17} className="shrink-0 text-cyan-200/70" />
               <input
                 type="search"
@@ -187,16 +187,16 @@ export default function ThreadFolderPage() {
             존재하지 않거나 접근할 수 없는 브랜치 폴더입니다.
           </div>
         ) : (
-          <div className="flex min-h-0 flex-1 flex-col gap-5">
-            <div className="relative shrink-0 overflow-visible rounded-3xl border border-amber-300/30 bg-gradient-to-br from-amber-300/15 via-orange-300/10 to-white/5 p-5 shadow-2xl shadow-amber-950/20">
+          <div className="flex min-h-0 flex-1 flex-col gap-3 sm:gap-5">
+            <div className="relative shrink-0 overflow-visible rounded-2xl border border-amber-300/30 bg-gradient-to-br from-amber-300/15 via-orange-300/10 to-white/5 p-3 shadow-2xl shadow-amber-950/20 sm:rounded-3xl sm:p-5">
               <span
                 aria-hidden="true"
                 className="absolute -top-3 left-7 h-4 w-28 rounded-t-xl border-x border-t border-amber-300/35 bg-amber-300/20"
               />
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex min-w-0 items-center gap-4">
-                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-amber-200/30 bg-amber-200/15 text-amber-200">
-                    <FolderOpen size={29} />
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-amber-200/30 bg-amber-200/15 text-amber-200 sm:h-14 sm:w-14 sm:rounded-2xl">
+                    <FolderOpen size={24} />
                   </div>
                   <div className="min-w-0">
                     <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-200/70">
@@ -223,7 +223,7 @@ export default function ThreadFolderPage() {
                               }
                             }}
                             aria-label="폴더명"
-                            className="min-w-0 rounded-lg border border-amber-200/30 bg-black/20 px-2.5 py-1 text-lg font-bold text-white outline-none focus:ring-2 focus:ring-amber-200/30"
+                            className="w-full min-w-0 rounded-lg border border-amber-200/30 bg-black/20 px-2.5 py-1 text-base font-bold text-white outline-none focus:ring-2 focus:ring-amber-200/30 sm:text-lg"
                           />
                           <button
                             type="button"
@@ -259,7 +259,7 @@ export default function ThreadFolderPage() {
                       </div>
                     ) : (
                       <div className="mt-1 flex min-w-0 items-center gap-2">
-                        <h2 className="min-w-0 truncate text-2xl font-bold text-white">
+                        <h2 className="min-w-0 truncate text-lg font-bold text-white sm:text-2xl">
                           {root.title || "제목 없는 스레드"}
                         </h2>
                         {root.can_manage && (
@@ -280,7 +280,7 @@ export default function ThreadFolderPage() {
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {(root.is_workspace || root.can_manage_workspace) && (
                     <button
                       type="button"
@@ -291,13 +291,13 @@ export default function ThreadFolderPage() {
                           setWorkspaceCreateOpen(true);
                         }
                       }}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-indigo-300/25 bg-indigo-300/10 px-3 py-2 text-xs font-bold text-indigo-100 transition hover:bg-indigo-300/20"
+                      className="inline-flex min-h-10 min-w-32 flex-1 items-center justify-center gap-1.5 rounded-full border border-indigo-300/25 bg-indigo-300/10 px-2 py-2 text-xs font-bold text-indigo-100 transition hover:bg-indigo-300/20 sm:flex-none sm:px-3"
                     >
                       <Users size={14} />
                       {root.is_workspace ? "멤버 관리" : "워크스페이스로 전환"}
                     </button>
                   )}
-                  <div className="flex items-center gap-2 rounded-full border border-amber-200/20 bg-amber-200/10 px-4 py-2 text-sm font-semibold text-amber-50">
+                  <div className="flex min-h-10 min-w-24 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-full border border-amber-200/20 bg-amber-200/10 px-2 py-2 text-xs font-semibold text-amber-50 sm:flex-none sm:gap-2 sm:px-4 sm:text-sm">
                     <GitBranch size={16} />
                     스레드 {nodes.length}개
                   </div>
@@ -307,7 +307,7 @@ export default function ThreadFolderPage() {
                       onClick={() => setDeleteTarget(root)}
                       aria-label="브랜치 폴더 전체 삭제"
                       title="루트와 전체 브랜치 삭제"
-                      className="flex h-9 w-9 items-center justify-center rounded-full border border-rose-300/20 bg-rose-300/5 text-rose-200/70 transition hover:bg-rose-300/10 hover:text-rose-100"
+                      className="flex h-10 w-10 items-center justify-center rounded-full border border-rose-300/20 bg-rose-300/5 text-rose-200/70 transition hover:bg-rose-300/10 hover:text-rose-100"
                     >
                       <Trash2 size={15} />
                     </button>
@@ -316,28 +316,28 @@ export default function ThreadFolderPage() {
               </div>
             </div>
 
-            <section className="flex min-h-0 flex-1 flex-col rounded-3xl border border-white/10 bg-white/5 p-5 backdrop-blur md:p-6">
-              <div className="mb-4 flex shrink-0 items-center justify-between">
+            <section className="flex min-h-0 flex-1 flex-col rounded-2xl border border-white/10 bg-white/5 p-3 backdrop-blur sm:rounded-3xl sm:p-5 md:p-6">
+              <div className="mb-3 flex shrink-0 items-center justify-between sm:mb-4">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-200/70">
                     저장된 스레드
                   </p>
-                  <h2 className="mt-1 text-xl font-bold">이 폴더의 스레드</h2>
+                  <h2 className="mt-1 text-lg font-bold sm:text-xl">이 폴더의 스레드</h2>
                 </div>
                 <span className="text-xs text-white/45">루트 포함</span>
               </div>
 
-              <div className="min-h-0 flex-1 overflow-y-auto pr-2 [scrollbar-color:rgba(103,232,249,0.35)_rgba(15,23,42,0.35)] [scrollbar-width:thin]">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-0 sm:pr-2 [scrollbar-color:rgba(103,232,249,0.35)_rgba(15,23,42,0.35)] [scrollbar-width:thin]">
                 <div className="grid gap-3 pb-1 sm:grid-cols-2 lg:grid-cols-3">
                   {filteredNodes.map((node) => {
                     const isRoot = node.depth === 0;
                     return (
                       <article
                         key={node.id}
-                        className={`flex min-h-36 flex-col rounded-2xl border border-white/10 bg-slate-950/35 p-4 shadow-lg transition ${
+                        className={`flex min-h-36 flex-col rounded-2xl border border-white/10 bg-slate-950/35 p-3 shadow-lg transition sm:p-4 ${
                           node.is_deleted
                             ? "opacity-40 saturate-50"
-                            : "hover:-translate-y-0.5 hover:border-cyan-300/35 hover:bg-slate-950/50"
+                            : "hover:border-cyan-300/35 hover:bg-slate-950/50 sm:hover:-translate-y-0.5"
                         }`}
                       >
                       <div className="flex items-start gap-3">
@@ -370,7 +370,7 @@ export default function ThreadFolderPage() {
                           type="button"
                           disabled={Boolean(node.is_deleted)}
                           onClick={() => router.push(`/threads/${node.id}`)}
-                          className="flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-white/85 transition hover:border-cyan-300/30 hover:bg-cyan-300/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-white/10 disabled:hover:bg-white/5"
+                          className="min-h-11 flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-white/85 transition hover:border-cyan-300/30 hover:bg-cyan-300/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-white/10 disabled:hover:bg-white/5"
                         >
                           {node.is_deleted ? "삭제된 스레드" : "스레드 열기"}
                         </button>
@@ -379,7 +379,7 @@ export default function ThreadFolderPage() {
                             type="button"
                             onClick={() => setDeleteTarget(node)}
                             aria-label={`${node.title || "제목 없는 스레드"} 삭제`}
-                            className="flex w-9 items-center justify-center rounded-xl border border-rose-300/15 bg-rose-300/5 text-rose-200/70 transition hover:bg-rose-300/10 hover:text-rose-100"
+                            className="flex h-11 w-11 items-center justify-center rounded-xl border border-rose-300/15 bg-rose-300/5 text-rose-200/70 transition hover:bg-rose-300/10 hover:text-rose-100"
                           >
                             <Trash2 size={14} />
                           </button>
@@ -436,7 +436,7 @@ export default function ThreadFolderPage() {
       />
 
       {deleteSuccessOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 px-6 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto bg-black/40 p-3 pb-[max(.75rem,env(safe-area-inset-bottom))] pt-[max(.75rem,env(safe-area-inset-top))] backdrop-blur-sm sm:px-6">
           <div
             role="status"
             aria-live="polite"

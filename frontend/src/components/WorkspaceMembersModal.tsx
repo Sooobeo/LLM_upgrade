@@ -94,8 +94,8 @@ export function WorkspaceMembersModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-      <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-slate-900 p-6 text-white shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto overscroll-contain bg-black/50 p-3 pb-[max(.75rem,env(safe-area-inset-bottom))] pt-[max(.75rem,env(safe-area-inset-top))]">
+      <div className="my-auto flex max-h-[calc(100dvh-1.5rem)] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-white/10 bg-slate-900 p-4 text-white shadow-xl sm:p-6">
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h3 className="text-lg font-semibold">워크스페이스 멤버</h3>
@@ -103,7 +103,7 @@ export function WorkspaceMembersModal({
               이 멤버들은 루트 스레드의 전체 브랜치 트리를 볼 수 있습니다.
             </p>
           </div>
-          <button onClick={onClose} className="text-sm text-blue-100 hover:text-white">
+          <button onClick={onClose} className="min-h-10 shrink-0 px-2 text-sm text-blue-100 hover:text-white">
             닫기
           </button>
         </div>
@@ -117,7 +117,7 @@ export function WorkspaceMembersModal({
         ) : members.length === 0 ? (
           <p className="text-sm text-blue-100">등록된 멤버가 없습니다.</p>
         ) : (
-          <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+          <div className="min-h-0 max-h-64 space-y-2 overflow-y-auto pr-1">
             {members.map((member) => (
               <div
                 key={`${member.user_id}-${member.role}`}
@@ -146,13 +146,13 @@ export function WorkspaceMembersModal({
               value={emailInput}
               onChange={(event) => setEmailInput(event.target.value)}
               placeholder="user@example.com"
-              className="w-full rounded-xl border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white focus:border-blue-400 focus:outline-none"
+              className="min-h-20 w-full rounded-xl border border-white/15 bg-slate-800 px-3 py-2 text-sm text-white focus:border-blue-400 focus:outline-none"
             />
             <button
               type="button"
               onClick={() => void handleAdd()}
               disabled={adding}
-              className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-blue-500 disabled:opacity-60"
+              className="min-h-11 w-full rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-blue-500 disabled:opacity-60 sm:w-auto"
             >
               {adding ? "추가 중..." : "추가"}
             </button>

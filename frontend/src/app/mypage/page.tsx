@@ -43,7 +43,7 @@ export default function MyPage() {
 
   return (
     <AppLayout>
-      <div className="mx-auto max-w-5xl px-6 py-10">
+      <div className="mx-auto max-w-5xl px-3 py-6 sm:px-6 sm:py-10">
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-2">
             <p className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-200">
@@ -59,7 +59,7 @@ export default function MyPage() {
 
           <button
             onClick={() => router.push("/threads")}
-            className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-white/20"
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-white/20 sm:w-auto"
           >
             ← 스레드 목록으로
           </button>
@@ -79,7 +79,7 @@ export default function MyPage() {
           </div>
         ) : (
           <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-lg backdrop-blur">
-            <div className="grid grid-cols-3 bg-white/5 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-blue-200">
+            <div className="hidden grid-cols-3 bg-white/5 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-blue-200 sm:grid">
               <span>파일 이름</span>
               <span>설명</span>
               <span className="text-right">생성일</span>
@@ -88,14 +88,23 @@ export default function MyPage() {
               {files.map((file) => (
                 <div
                   key={file.id}
-                  className="grid grid-cols-3 items-center px-4 py-3 text-sm text-white transition hover:bg-white/10"
+                  className="grid grid-cols-1 gap-2 px-4 py-4 text-sm text-white transition hover:bg-white/10 sm:grid-cols-3 sm:items-center sm:gap-0 sm:py-3"
                 >
-                  <span className="font-semibold">{file.name}</span>
-                  <span className="text-blue-100">{file.description || "—"}</span>
-                  <span className="text-right text-xs text-blue-200">
+                  <span className="flex min-w-0 justify-between gap-3 font-semibold sm:block">
+                    <span className="text-xs font-medium text-blue-200 sm:hidden">파일 이름</span>
+                    <span className="min-w-0 break-words text-right sm:text-left">{file.name}</span>
+                  </span>
+                  <span className="flex min-w-0 justify-between gap-3 text-blue-100 sm:block">
+                    <span className="text-xs font-medium text-blue-200 sm:hidden">설명</span>
+                    <span className="min-w-0 break-words text-right sm:text-left">{file.description || "—"}</span>
+                  </span>
+                  <span className="flex justify-between gap-3 text-right text-xs text-blue-200 sm:block">
+                    <span className="font-medium sm:hidden">생성일</span>
+                    <span>
                     {file.created_at
                       ? new Date(file.created_at).toLocaleString()
                       : ""}
+                    </span>
                   </span>
                 </div>
               ))}
