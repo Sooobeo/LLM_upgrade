@@ -13,19 +13,45 @@ export default function LandingPage() {
   const [googleLoginLoading, setGoogleLoginLoading] = useState(false);
   const [googleLoginError, setGoogleLoginError] = useState<string | null>(null);
 
-  const handleGoogleLogin = () => {
+  const handleGoogleLogin = async () => {
     setGoogleLoginLoading(true);
     setGoogleLoginError(null);
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 25_000);
     try {
-      const oauthUrl = new URL("/auth/google/login", API_BASE_URL);
-      oauthUrl.searchParams.set(
+      const oauthRequestUrl = new URL("/auth/google/url", API_BASE_URL);
+      oauthRequestUrl.searchParams.set(
         "redirect_to",
         `${window.location.origin}/auth/callback`,
       );
-      window.location.assign(oauthUrl.toString());
-    } catch {
+      const response = await fetch(oauthRequestUrl.toString(), {
+        method: "GET",
+        headers: { Accept: "application/json" },
+        signal: controller.signal,
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.authorize_url) {
+        const detail = data?.detail;
+        const message =
+          typeof detail === "string"
+            ? detail
+            : detail?.message || "Google 로그인을 시작하지 못했습니다.";
+        throw new Error(message);
+      }
+      window.location.assign(data.authorize_url);
+    } catch (error) {
       setGoogleLoginLoading(false);
-      setGoogleLoginError("로그인 서버 주소를 확인할 수 없습니다.");
+      setGoogleLoginError(
+        error instanceof DOMException && error.name === "AbortError"
+          ? "로그인 서버 응답이 지연되고 있습니다. 잠시 후 다시 시도해 주세요."
+          : error instanceof TypeError
+            ? "로그인 서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요."
+          : error instanceof Error
+            ? error.message
+            : "Google 로그인을 시작하지 못했습니다.",
+      );
+    } finally {
+      window.clearTimeout(timeoutId);
     }
   };
 
@@ -156,6 +182,7 @@ export default function LandingPage() {
                   <button
                     onClick={handleGoogleLogin}
                     disabled={googleLoginLoading}
+                    aria-busy={googleLoginLoading}
                     className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold shadow transition hover:-translate-y-0.5 hover:shadow-md disabled:cursor-wait disabled:opacity-70 disabled:hover:translate-y-0"
                   >
                     <svg

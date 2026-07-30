@@ -33,6 +33,53 @@ class GoogleRefreshBody(BaseModel):
     refresh_token: str = Field(..., min_length=20, max_length=4096)
 
 
+class GoogleLoginUrlResponse(BaseModel):
+    authorize_url: str
+
+
+def _google_authorize_url(redirect_to: Optional[str] = None) -> str:
+    if settings.missing_required_settings:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "AUTH_NOT_CONFIGURED",
+                "message": "로그인 서버의 Supabase 설정이 누락되었습니다.",
+            },
+        )
+
+    base = settings.SUPABASE_URL.rstrip("/")
+    query = {"provider": "google"}
+    if redirect_to:
+        parsed = urlsplit(redirect_to)
+        redirect_origin = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.netloc
+            or redirect_origin not in settings.cors_origins
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "INVALID_REDIRECT",
+                    "message": "현재 사이트 주소가 Google 로그인 허용 목록에 없습니다.",
+                },
+            )
+        query["redirect_to"] = redirect_to
+    return f"{base}/auth/v1/authorize?{urlencode(query)}"
+
+
+@router.get(
+    "/google/url",
+    response_model=GoogleLoginUrlResponse,
+    include_in_schema=False,
+)
+def google_login_url_route(redirect_to: Optional[str] = None):
+    """Return the hosted OAuth URL so the frontend can handle loading/errors."""
+    return GoogleLoginUrlResponse(
+        authorize_url=_google_authorize_url(redirect_to),
+    )
+
+
 @router.get("/google/login", include_in_schema=False)
 def google_login_route(redirect_to: Optional[str] = None):
     """
@@ -41,16 +88,10 @@ def google_login_route(redirect_to: Optional[str] = None):
     If redirect_to is provided, Supabase will send the user there after login
     (must be allowed in Supabase project redirect settings).
     """
-    base = settings.SUPABASE_URL.rstrip("/")
-    query = {"provider": "google"}
-    if redirect_to:
-        parsed = urlsplit(redirect_to)
-        redirect_origin = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
-        if parsed.scheme not in {"http", "https"} or redirect_origin not in settings.cors_origins:
-            raise HTTPException(status_code=400, detail="redirect_to is not allowed")
-        query["redirect_to"] = redirect_to
-    url = f"{base}/auth/v1/authorize?{urlencode(query)}"
-    return RedirectResponse(url=url, status_code=302)
+    return RedirectResponse(
+        url=_google_authorize_url(redirect_to),
+        status_code=302,
+    )
 
 
 @router.post("/google/exchange-id-token", response_model=GoogleExchangeResp, status_code=200)

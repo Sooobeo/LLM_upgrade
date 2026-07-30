@@ -113,6 +113,40 @@ def test_google_login_redirect_accepts_allowlisted_frontend(monkeypatch):
     assert "provider=google" in response.headers["location"]
 
 
+def test_google_login_url_supports_frontend_loading_ui(monkeypatch):
+    frontend_origin = "https://frontend.example"
+    monkeypatch.setattr(settings, "CORS_ORIGINS", frontend_origin)
+
+    response = client.get(
+        "/auth/google/url",
+        params={"redirect_to": f"{frontend_origin}/auth/callback"},
+    )
+
+    assert response.status_code == 200
+    authorize_url = response.json()["authorize_url"]
+    assert authorize_url.startswith(f"{settings.SUPABASE_URL}/auth/v1/authorize?")
+    assert "provider=google" in authorize_url
+
+
+def test_google_login_url_rejects_untrusted_redirect():
+    response = client.get(
+        "/auth/google/url",
+        params={"redirect_to": "https://attacker.example/auth/callback"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "INVALID_REDIRECT"
+
+
+def test_google_login_url_reports_missing_backend_configuration(monkeypatch):
+    monkeypatch.setattr(settings, "SUPABASE_URL", "")
+
+    response = client.get("/auth/google/url")
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "AUTH_NOT_CONFIGURED"
+
+
 def test_production_refresh_cookie_supports_cross_site_frontend(monkeypatch):
     monkeypatch.setattr(settings, "APP_ENV", AppEnv.prod)
     response = Response()
