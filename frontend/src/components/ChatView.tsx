@@ -694,11 +694,7 @@ export function ChatView() {
           <div className="flex flex-wrap items-center justify-between gap-3 p-2">
             <div className="flex items-center gap-3">
               <button
-                onClick={() => {
-                  if (typeof window !== 'undefined') {
-                    window.location.href = '/threads';
-                  }
-                }}
+                onClick={() => router.push('/threads')}
                 className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-sm font-semibold text-white/80 hover:bg-white/10"
               >
                 ←

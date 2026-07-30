@@ -10,7 +10,7 @@ from pydantic import BaseModel, EmailStr, Field
 
 from app.core.config import settings
 from app.core.security import clear_refresh_cookie, require_trusted_origin, set_refresh_cookie
-from app.db.deps import get_current_user
+from app.db.deps import get_access_token, get_current_user
 from app.repository.auth import (
     current_user_profile,
     exchange_google_id_token,
@@ -144,15 +144,26 @@ def refresh_route(request: Request, response: Response):
 
 
 @router.post("/google/set-session", response_model=AccessOnlyResp)
-def google_set_session(body: GoogleRefreshBody, request: Request, response: Response):
+def google_set_session(
+    body: GoogleRefreshBody,
+    request: Request,
+    response: Response,
+    access_token: str = Depends(get_access_token),
+    _user: Dict[str, Any] = Depends(get_current_user),
+):
     """
-    Set refresh cookie from Supabase-provided refresh_token (after hosted OAuth redirect).
-    Frontend should send refresh_token parsed from the Supabase redirect hash.
+    Validate the access token returned by hosted OAuth, then persist its
+    matching refresh token. Do not rotate the refresh token during the OAuth
+    callback: Supabase refresh tokens are rotating and an immediate second
+    exchange can invalidate an otherwise successful login.
     """
     require_trusted_origin(request)
-    resp, new_refresh = refresh_with_cookie(body.refresh_token)
-    set_refresh_cookie(response, new_refresh or body.refresh_token, remember=False)
-    return resp
+    set_refresh_cookie(response, body.refresh_token, remember=False)
+    return AccessOnlyResp(
+        access_token=access_token,
+        token_type="bearer",
+        expires_in=3600,
+    )
 
 
 @router.post("/logout")

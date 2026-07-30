@@ -41,6 +41,69 @@ function asHostOnlyCookie(setCookie: string) {
   return `${withoutSameSite}; SameSite=Lax`;
 }
 
+async function createGoogleSession(
+  requestBody: string,
+  authorization: string | null,
+) {
+  let refreshToken = "";
+  try {
+    const payload = JSON.parse(requestBody) as { refresh_token?: unknown };
+    refreshToken =
+      typeof payload.refresh_token === "string" ? payload.refresh_token : "";
+  } catch {
+    // The validation response below handles malformed JSON uniformly.
+  }
+
+  const accessToken = authorization?.replace(/^Bearer\s+/i, "").trim() || "";
+  if (
+    accessToken.length < 20 ||
+    accessToken.length > 8192 ||
+    refreshToken.length < 20 ||
+    refreshToken.length > 4096
+  ) {
+    return NextResponse.json(
+      {
+        detail: {
+          code: "INVALID_OAUTH_SESSION",
+          message: "Google 로그인 정보가 올바르지 않습니다.",
+        },
+      },
+      { status: 400 },
+    );
+  }
+
+  const verification = await fetch(`${BACKEND_API_BASE_URL}/auth/me`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: "no-store",
+  });
+  if (!verification.ok) {
+    return NextResponse.json(
+      {
+        detail: {
+          code: "INVALID_OAUTH_SESSION",
+          message: "Google 로그인 토큰을 확인하지 못했습니다.",
+        },
+      },
+      { status: verification.status === 503 ? 503 : 401 },
+    );
+  }
+
+  const response = NextResponse.json({
+    access_token: accessToken,
+    token_type: "bearer",
+    expires_in: 3600,
+  });
+  response.cookies.set("refresh_token", refreshToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 60 * 60 * 24 * 7,
+    path: "/",
+  });
+  response.headers.set("Cache-Control", "no-store");
+  return response;
+}
+
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ action: string }> },
@@ -84,6 +147,10 @@ export async function POST(
   }
 
   try {
+    if (action === "google-session") {
+      return await createGoogleSession(requestBody, authorization);
+    }
+
     const backendResponse = await fetch(
       `${BACKEND_API_BASE_URL}${backendPath}`,
       {

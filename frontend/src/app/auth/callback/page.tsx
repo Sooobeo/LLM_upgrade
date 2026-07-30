@@ -19,7 +19,7 @@ function parseParams(input: string): TokenParams {
 export default function AuthCallbackPage() {
   const router = useRouter();
   const callbackStarted = useRef(false);
-  const [message, setMessage] = useState("스레드를 불러오는 중입니다...");
+  const [message, setMessage] = useState("로그인 세션을 확인하는 중입니다...");
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
@@ -32,6 +32,7 @@ export default function AuthCallbackPage() {
     const hashParams = parseParams(window.location.hash || "");
     const searchParams = parseParams(window.location.search || "");
     const allParams = { ...searchParams, ...hashParams };
+    const accessToken = allParams["access_token"];
     const refreshToken = allParams["refresh_token"];
     const oauthError =
       allParams["error_description"] ||
@@ -45,18 +46,33 @@ export default function AuthCallbackPage() {
       return;
     }
 
-    if (!refreshToken) {
+    if (!accessToken || !refreshToken) {
       setFailed(true);
       setMessage("로그인 정보가 없습니다. 다시 로그인해주세요.");
       return;
     }
 
-    fetch("/api/auth/google-session", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ refresh_token: refreshToken }),
-    })
+    const establishSession = async () => {
+      let response: Response | null = null;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        response = await fetch("/api/auth/google-session", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          credentials: "include",
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        });
+        if (![502, 503].includes(response.status) || attempt === 1) {
+          return response;
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 800));
+      }
+      return response!;
+    };
+
+    establishSession()
       .then(async (res) => {
         const data = await res.json().catch(() => null);
         if (!res.ok || !data?.access_token) {

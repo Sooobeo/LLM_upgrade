@@ -27,7 +27,7 @@ export function AppHeader() {
           ) : error ? (
             <button
               className="rounded-full border border-red-300/40 bg-red-500/20 px-3 py-1 text-xs font-semibold text-red-50 shadow-sm hover:bg-red-500/30"
-              onClick={() => router.push("/")}
+              onClick={() => router.replace("/login")}
             >
               다시 로그인
             </button>

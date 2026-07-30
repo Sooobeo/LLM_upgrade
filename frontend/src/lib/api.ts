@@ -102,10 +102,8 @@ async function apiFetchInternal(
     if (refreshed) {
       headers.set("Authorization", `Bearer ${refreshed}`);
       response = await doFetch(headers);
-    } else if (token) {
-      // Token existed but server still says 401; fall back to retrying once more with current token.
-      headers.set("Authorization", `Bearer ${token}`);
-      response = await doFetch(headers);
+    } else {
+      auth.clear();
     }
   }
 

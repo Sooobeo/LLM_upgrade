@@ -34,8 +34,8 @@ export function useCurrentUser(options: Options = {}) {
         if (cancelled) return;
         const message = err?.message || "사용자 정보를 불러오지 못했습니다.";
         setError(message);
-        if (redirectIfMissing) {
-          router.push("/");
+        if (redirectIfMissing && err?.status === 401) {
+          router.replace("/login");
         }
       } finally {
         if (!cancelled) {

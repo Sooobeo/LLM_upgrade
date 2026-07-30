@@ -87,7 +87,7 @@ export async function apiClient(
     const notLoggedIn: any = new Error("Not logged in");
     notLoggedIn.status = 401;
     if (typeof window !== "undefined") {
-      window.location.href = "/login";
+      window.location.replace("/login");
     }
     throw notLoggedIn;
   }
@@ -126,7 +126,7 @@ export async function apiClient(
     error.hasAuth = hasAuth;
     error.threadId = meta?.threadId;
     if (response.status === 401 && typeof window !== "undefined") {
-      window.location.href = "/login";
+      window.location.replace("/login");
     }
     throw error;
   }
