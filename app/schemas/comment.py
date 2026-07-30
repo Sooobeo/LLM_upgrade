@@ -6,13 +6,20 @@ class CommentCreate(BaseModel):
     message_index: int = Field(..., ge=0, lt=2_147_483_647)
     content: str = Field(..., min_length=1, max_length=4000)
 
+
+class CommentUpdate(BaseModel):
+    content: str = Field(..., min_length=1, max_length=4000)
+
+
 class CommentResponse(BaseModel):
     id: str
     thread_id: str
     message_index: int
     user_id: str
     content: str
-    created_at: str
+    author_id: Optional[str] = None
+    can_edit: bool = False
+    created_at: Optional[str] = None
 
 
 class BranchCommentCreate(BaseModel):

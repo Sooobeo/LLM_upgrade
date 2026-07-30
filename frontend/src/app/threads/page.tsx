@@ -14,7 +14,6 @@ import {
   BranchNode,
   collectBranchThreadIds,
   deleteThread,
-  fetchMembers,
   flattenBranchTree,
   listThreadBranches,
   listThreads,
@@ -34,6 +33,7 @@ export default function ThreadsPage() {
   const [deleteSuccessOpen, setDeleteSuccessOpen] = useState(false);
   const [workspaceThreadId, setWorkspaceThreadId] = useState<string | null>(null);
   const [membersThreadId, setMembersThreadId] = useState<string | null>(null);
+  const [membersCanManage, setMembersCanManage] = useState(false);
   const [threadSearch, setThreadSearch] = useState("");
 
   useEffect(() => {
@@ -277,6 +277,16 @@ export default function ThreadsPage() {
                     ]);
                     setDeleteSuccessOpen(true);
                   }}
+                  onWorkspace={async (root) => {
+                    if (root.is_workspace) {
+                      setMembersCanManage(
+                        Boolean(root.can_manage_workspace),
+                      );
+                      setMembersThreadId(root.id);
+                    } else if (root.can_manage_workspace) {
+                      setWorkspaceThreadId(root.id);
+                    }
+                  }}
                 />
               )}
 
@@ -316,16 +326,13 @@ export default function ThreadsPage() {
                   });
                 }}
                 onWorkspace={async (thread) => {
-                  try {
-                    const members = await fetchMembers(thread.id);
-
-                    if (members.length <= 1) {
-                      setWorkspaceThreadId(thread.id);
-                    } else {
-                      setMembersThreadId(thread.id);
-                    }
-                  } catch {
-                    alert("워크스페이스 정보를 불러오지 못했습니다.");
+                  if (thread.is_workspace) {
+                    setMembersCanManage(
+                      Boolean(thread.can_manage_workspace),
+                    );
+                    setMembersThreadId(thread.id);
+                  } else if (thread.can_manage_workspace) {
+                    setWorkspaceThreadId(thread.id);
                   }
                 }}
               />
@@ -355,7 +362,11 @@ export default function ThreadsPage() {
               )
             );
             refetch();
+            void queryClient.invalidateQueries({
+              queryKey: ["thread-branches"],
+            });
             setWorkspaceThreadId(null);
+            setMembersCanManage(true);
             setMembersThreadId(threadId); 
           }}
         />
@@ -364,6 +375,7 @@ export default function ThreadsPage() {
       {membersThreadId && (
         <WorkspaceMembersModal
           threadId={membersThreadId}
+          canManage={membersCanManage}
           onClose={() => setMembersThreadId(null)}
         />
       )}

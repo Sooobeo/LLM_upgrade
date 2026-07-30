@@ -46,7 +46,10 @@ def _can_access_thread(user_id: str, thread_id: str, access_token: str) -> bool:
     """
     접근 허용 조건
     1) threads.owner_id == user_id
-    2) threads.is_workspace == true 이고 thread_members에 user가 존재
+    2) thread_members에 user가 존재
+
+    브랜치 하위 스레드는 워크스페이스가 아니지만 루트 멤버의 접근권한은
+    명시적인 membership 행으로 상속할 수 있다.
     """
 
     # 1) owner check
@@ -60,16 +63,8 @@ def _can_access_thread(user_id: str, thread_id: str, access_token: str) -> bool:
     if owner_rows:
         return True
 
-    # 2) workspace + member check
-    q_thread = "&".join([
-        f"id=eq.{quote(thread_id)}",
-        "select=id,is_workspace",
-        "limit=1",
-    ])
-    trows = sb.rest_select("threads", q_thread, access_token)
-    if not trows or not trows[0].get("is_workspace"):
-        return False
-
+    # Branch children inherit an explicit thread_members row from the
+    # workspace root without becoming workspaces themselves.
     q_member = "&".join([
         f"thread_id=eq.{quote(thread_id)}",
         f"user_id=eq.{quote(user_id)}",
@@ -141,6 +136,40 @@ def _get_thread_metadata(thread_id: str, access_token: str) -> Optional[Dict[str
     if not rows:
         return None
     return _decode_branch_metadata(rows[0].get("content") or "")
+
+
+def get_branch_root_id(thread_id: str, access_token: str) -> str:
+    metadata = _get_thread_metadata(thread_id, access_token) or {}
+    return str(metadata.get("root_thread_id") or thread_id)
+
+
+def is_branch_root(thread_id: str, access_token: str) -> bool:
+    metadata = _get_thread_metadata(thread_id, access_token) or {}
+    return (
+        not metadata.get("parent_thread_id")
+        or metadata.get("root_thread_id") == thread_id
+    )
+
+
+def branch_lineage_thread_ids(
+    owner_id: str,
+    root_thread_id: str,
+    access_token: str,
+) -> List[str]:
+    """Return a root and every owned branch descendant in its lineage."""
+    owned_threads = _owned_thread_rows(owner_id, access_token)
+    owned_ids = [str(row["id"]) for row in owned_threads if row.get("id")]
+    metadata_by_id = _metadata_for_thread_ids(owned_ids, access_token)
+    lineage_ids = [
+        thread_id
+        for thread_id in owned_ids
+        if thread_id == root_thread_id
+        or (metadata_by_id.get(thread_id) or {}).get("root_thread_id")
+        == root_thread_id
+    ]
+    if root_thread_id not in lineage_ids:
+        lineage_ids.insert(0, root_thread_id)
+    return list(dict.fromkeys(lineage_ids))
 
 
 def _persist_thread_metadata(
@@ -532,8 +561,24 @@ async def create_thread_branch(
     child_thread_id = str(uuid4())
     now = datetime.now(timezone.utc).isoformat()
     title = (parent.get("title") or "").strip()
-    is_workspace = bool(parent.get("is_workspace"))
     root_thread_id = (metadata or {}).get("root_thread_id") or parent_thread_id
+    root = parent
+    if root_thread_id != parent_thread_id:
+        root_rows = sb.rest_select(
+            "threads",
+            "&".join(
+                [
+                    f"id=eq.{quote(root_thread_id)}",
+                    "select=id,title,owner_id,is_workspace",
+                    "limit=1",
+                ]
+            ),
+            access_token,
+        )
+        if not root_rows:
+            raise BranchNotFoundError("Branch root not found")
+        root = root_rows[0]
+    root_is_workspace = bool(root.get("is_workspace"))
 
     # Mark the original/root thread as Gemini as well. This also makes legacy
     # Gemini threads branchable after the first explicit branch request.
@@ -557,25 +602,25 @@ async def create_thread_branch(
                 "id": child_thread_id,
                 "title": title,
                 "owner_id": owner_id,
-                "is_workspace": is_workspace,
+                "is_workspace": False,
                 "created_at": now,
             }
         ],
         access_token,
     )
     try:
-        if is_workspace:
-            parent_members = sb.rest_select(
+        if root_is_workspace:
+            root_members = sb.rest_select(
                 "thread_members",
                 "&".join(
                     [
-                        f"thread_id=eq.{quote(parent_thread_id)}",
+                        f"thread_id=eq.{quote(root_thread_id)}",
                         "select=user_id,role",
                     ]
                 ),
                 access_token,
             )
-            if parent_members:
+            if root_members:
                 sb.rest_insert(
                     "thread_members",
                     [
@@ -584,7 +629,7 @@ async def create_thread_branch(
                             "user_id": member["user_id"],
                             "role": member.get("role") or "member",
                         }
-                        for member in parent_members
+                        for member in root_members
                         if member.get("user_id")
                     ],
                     access_token,
@@ -631,7 +676,7 @@ def list_branch_trees(owner_id: str, access_token: str) -> List[Dict[str, Any]]:
         "&".join(
             [
                 f"user_id=eq.{quote(owner_id)}",
-                "select=thread_id",
+                "select=thread_id,role",
             ]
         ),
         access_token,
@@ -643,6 +688,11 @@ def list_branch_trees(owner_id: str, access_token: str) -> List[Dict[str, Any]]:
             if row.get("thread_id")
         )
     )
+    member_role_by_thread_id = {
+        str(row["thread_id"]): str(row.get("role") or "member")
+        for row in member_rows
+        if row.get("thread_id")
+    }
     owned_threads = sb.rest_select(
         "threads",
         "&".join(
@@ -728,6 +778,19 @@ def list_branch_trees(owner_id: str, access_token: str) -> List[Dict[str, Any]]:
         metadata = metadata_by_id.get(thread_id) or {}
         if metadata.get("tutorial_dismissed"):
             continue
+        is_root = (
+            not metadata.get("parent_thread_id")
+            or metadata.get("root_thread_id") == thread_id
+        )
+        is_workspace = is_root and bool(thread.get("is_workspace"))
+        can_manage = thread.get("owner_id") == owner_id
+        workspace_role = None
+        if is_workspace:
+            workspace_role = (
+                "owner"
+                if can_manage
+                else member_role_by_thread_id.get(thread_id)
+            )
         nodes[thread_id] = {
             "id": thread_id,
             "thread_id": thread_id,
@@ -737,7 +800,10 @@ def list_branch_trees(owner_id: str, access_token: str) -> List[Dict[str, Any]]:
             "created_at": thread.get("created_at") or "",
             "is_deleted": bool(metadata.get("is_deleted")),
             "is_tutorial": bool(metadata.get("is_tutorial")),
-            "can_manage": thread.get("owner_id") == owner_id,
+            "can_manage": can_manage,
+            "is_workspace": is_workspace,
+            "workspace_role": workspace_role,
+            "can_manage_workspace": is_root and can_manage,
             "children": [],
         }
 
@@ -779,12 +845,17 @@ def list_threads_for_owner(
         "&".join(
             [
                 f"user_id=eq.{quote(owner_id)}",
-                "select=thread_id",
+                "select=thread_id,role",
             ]
         ),
         access_token,
     )
     member_thread_ids = [m.get("thread_id") for m in member_rows if m.get("thread_id")]
+    member_roles = {
+        str(row["thread_id"]): str(row.get("role") or "member")
+        for row in member_rows
+        if row.get("thread_id")
+    }
 
     # Build OR filter: owner or in member_thread_ids
     or_filters = [f"owner_id.eq.{quote(owner_id)}"]
@@ -799,6 +870,7 @@ def list_threads_for_owner(
                 "title",
                 "created_at",
                 "is_workspace",
+                "owner_id",
                 "messages(count)",
                 "last:messages(content,created_at)",
             ]
@@ -817,8 +889,6 @@ def list_threads_for_owner(
     listed_ids = [str(row["id"]) for row in rows if row.get("id")]
     listed_metadata = _metadata_for_thread_ids(listed_ids, access_token)
 
-    member_thread_id_set = set(member_thread_ids)
-
     out: List[Dict[str, Any]] = []
     for r in rows:
         metadata = listed_metadata.get(str(r.get("id"))) or {}
@@ -828,15 +898,23 @@ def list_threads_for_owner(
         preview = None
         if isinstance(r.get("last"), list) and r["last"]:
             preview = (r["last"][0].get("content") or "")[:50] or None
-        # If current user is listed as a member, the thread is a workspace for them.
-        is_ws = bool(r.get("is_workspace", False))
-        if not is_ws and r.get("id") in member_thread_id_set:
-            is_ws = True
+        thread_id = str(r.get("id") or "")
+        is_root = (
+            not metadata.get("parent_thread_id")
+            or metadata.get("root_thread_id") == thread_id
+        )
+        is_owner = r.get("owner_id") == owner_id
+        is_ws = is_root and bool(r.get("is_workspace", False))
+        workspace_role = None
+        if is_ws:
+            workspace_role = "owner" if is_owner else member_roles.get(thread_id)
         out.append({
-            "id": r.get("id"),
+            "id": thread_id,
             "title": r.get("title"),
             "created_at": r.get("created_at"),
             "is_workspace": is_ws,
+            "workspace_role": workspace_role,
+            "can_manage_workspace": is_root and is_owner,
             "message_count": cnt,
             "last_message_preview": preview,
         })
@@ -1048,18 +1126,21 @@ def get_thread_detail(user_id: str, thread_id: str, access_token: str):
     if metadata.get("is_deleted"):
         return None
 
+    member_role = None
     if thread["owner_id"] != user_id:
         m = sb.rest_select(
             "thread_members",
             "&".join([
                 f"thread_id=eq.{quote(thread_id)}",
                 f"user_id=eq.{quote(user_id)}",
+                "select=role",
                 "limit=1",
             ]),
             access_token,
         )
         if not m:
             return None
+        member_role = str(m[0].get("role") or "member")
 
     _, messages = list_thread_messages(
         owner_id=thread["owner_id"],
@@ -1074,6 +1155,17 @@ def get_thread_detail(user_id: str, thread_id: str, access_token: str):
     thread["can_rename"] = thread["owner_id"] == user_id
     thread["parent_thread_id"] = metadata.get("parent_thread_id")
     thread["context_preview"] = metadata.get("context_preview")
+    is_root = (
+        not metadata.get("parent_thread_id")
+        or metadata.get("root_thread_id") == thread_id
+    )
+    thread["is_workspace"] = is_root and bool(thread.get("is_workspace"))
+    thread["workspace_role"] = (
+        ("owner" if thread["owner_id"] == user_id else member_role)
+        if thread["is_workspace"]
+        else None
+    )
+    thread["can_manage_workspace"] = is_root and thread["owner_id"] == user_id
     return thread
 
 

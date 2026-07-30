@@ -114,7 +114,7 @@ def _accessible_thread_ids(
         if row.get("id")
         and (
             row.get("owner_id") == user_id
-            or (bool(row.get("is_workspace")) and str(row["id"]) in member_ids)
+            or str(row["id"]) in member_ids
         )
     ]
 

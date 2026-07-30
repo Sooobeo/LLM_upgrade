@@ -5,6 +5,8 @@ export type ThreadSummary = {
   title: string | null;
   created_at: string;
   is_workspace?: boolean;
+  workspace_role?: string | null;
+  can_manage_workspace?: boolean;
   message_count?: number;
   last_message_preview?: string | null;
 };
@@ -23,6 +25,8 @@ export type ThreadDetail = {
   created_at: string;
   messages: ChatMessage[];
   is_workspace?: boolean;
+  workspace_role?: string | null;
+  can_manage_workspace?: boolean;
   can_rename?: boolean;
   parent_thread_id?: string | null;
   context_preview?: string | null;
@@ -56,6 +60,17 @@ export type ThreadBookmark = {
   created_at?: string;
 };
 
+export type ThreadMessageComment = {
+  id: string;
+  thread_id: string;
+  message_index: number;
+  user_id: string;
+  author_id?: string | null;
+  can_edit?: boolean;
+  content: string;
+  created_at?: string | null;
+};
+
 export type BranchNode = {
   id: string;
   title: string;
@@ -65,6 +80,9 @@ export type BranchNode = {
   is_deleted?: boolean;
   is_tutorial?: boolean;
   can_manage?: boolean;
+  is_workspace?: boolean;
+  workspace_role?: string | null;
+  can_manage_workspace?: boolean;
   children: BranchNode[];
 };
 
@@ -295,6 +313,67 @@ export async function setWorkspace(
         is_workspace: true,
       },
     },
+    token,
+    onDebug,
+  );
+}
+
+export async function listThreadComments(
+  threadId: string,
+  token: string,
+  onDebug?: (info: FetchDebug) => void,
+): Promise<ThreadMessageComment[]> {
+  const data = await apiFetch(
+    `/threads/${threadId}/comments`,
+    { method: "GET" },
+    token,
+    onDebug,
+  );
+  return Array.isArray(data) ? data : [];
+}
+
+export async function createThreadComment(
+  threadId: string,
+  messageIndex: number,
+  content: string,
+  token: string,
+  onDebug?: (info: FetchDebug) => void,
+): Promise<ThreadMessageComment> {
+  return apiFetch(
+    `/threads/${threadId}/comments`,
+    {
+      method: "POST",
+      body: { message_index: messageIndex, content },
+    },
+    token,
+    onDebug,
+  );
+}
+
+export async function updateThreadComment(
+  threadId: string,
+  commentId: string,
+  content: string,
+  token: string,
+  onDebug?: (info: FetchDebug) => void,
+): Promise<ThreadMessageComment> {
+  return apiFetch(
+    `/threads/${threadId}/comments/${commentId}`,
+    { method: "PATCH", body: { content } },
+    token,
+    onDebug,
+  );
+}
+
+export async function deleteThreadComment(
+  threadId: string,
+  commentId: string,
+  token: string,
+  onDebug?: (info: FetchDebug) => void,
+) {
+  return apiFetch(
+    `/threads/${threadId}/comments/${commentId}`,
+    { method: "DELETE" },
     token,
     onDebug,
   );

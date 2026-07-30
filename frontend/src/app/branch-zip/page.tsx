@@ -158,6 +158,11 @@ export default function BranchZipPage() {
                         <span className="min-w-0 flex-1 truncate">
                           {root.title || "제목 없는 스레드"}
                         </span>
+                        {root.is_workspace && (
+                          <span className="shrink-0 rounded-full border border-indigo-300/25 bg-indigo-300/10 px-2 py-0.5 text-[9px] font-bold text-indigo-100">
+                            워크스페이스
+                          </span>
+                        )}
                         <span
                           aria-hidden="true"
                           className={`h-0 w-0 shrink-0 border-y-[6px] border-l-[9px] border-y-transparent border-l-cyan-300 transition-transform ${

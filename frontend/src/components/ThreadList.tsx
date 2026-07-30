@@ -189,9 +189,16 @@ export function ThreadList({
                         )}
                       </div>
                     ) : (
-                      <h3 className="line-clamp-2 text-sm font-semibold leading-5 text-white">
-                        {thread.title || "Untitled"}
-                      </h3>
+                      <>
+                        <h3 className="line-clamp-2 text-sm font-semibold leading-5 text-white">
+                          {thread.title || "Untitled"}
+                        </h3>
+                        {thread.is_workspace && (
+                          <span className="mt-1.5 inline-flex rounded-full border border-indigo-300/25 bg-indigo-300/10 px-2 py-0.5 text-[10px] font-bold text-indigo-100">
+                            워크스페이스
+                          </span>
+                        )}
+                      </>
                     )}
                   </div>
 
@@ -217,7 +224,9 @@ export function ThreadList({
                 <div className="mt-auto pt-3">
                   {(onWorkspace || onDelete) && (
                     <div className="mb-2 flex items-center gap-2">
-                      {onWorkspace && (
+                      {onWorkspace &&
+                        (thread.is_workspace ||
+                          thread.can_manage_workspace) && (
                         <button
                           type="button"
                           disabled={loadingWorkspaceId === thread.id}
@@ -236,7 +245,9 @@ export function ThreadList({
                           ) : (
                             <Users size={12} />
                           )}
-                          Set workspace
+                          {thread.is_workspace
+                            ? "멤버 관리"
+                            : "워크스페이스로 전환"}
                         </button>
                       )}
                       {onDelete && (

@@ -16,9 +16,11 @@ from app.repository.thread import (
     BranchNotFoundError,
     add_messages_to_thread,
     add_thread_bookmark,
+    branch_lineage_thread_ids,
     create_thread_with_messages,
     delete_thread_by_id,
     get_thread_detail,
+    is_branch_root,
     list_thread_messages,
     list_thread_bookmarks,
     list_threads_for_owner,
@@ -380,6 +382,15 @@ def convert_to_workspace(
     if thread.get("owner_id") != owner_id:
         raise HTTPException(status_code=403, detail="Only the owner can convert to workspace.")
 
+    if not is_branch_root(thread_id, access_token):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "WORKSPACE_ROOT_ONLY",
+                "message": "브랜치의 루트 스레드만 워크스페이스로 전환할 수 있습니다.",
+            },
+        )
+
     # 2) Mark as workspace (RLS-enforced via caller token)
     sb.rest_update("threads", f"id=eq.{quote(thread_id)}", {"is_workspace": True}, access_token)
 
@@ -422,6 +433,56 @@ def convert_to_workspace(
             if not exc.response or exc.response.status_code != 409:
                 raise
 
+    # Every workspace member receives an inherited membership row on existing
+    # descendants. The descendants remain ordinary branch threads
+    # (is_workspace=false), but RLS can still grant the whole team access.
+    lineage_ids = branch_lineage_thread_ids(owner_id, thread_id, access_token)
+    if len(lineage_ids) > 1:
+        safe_lineage_ids = ",".join(quote(value) for value in lineage_ids)
+        root_members = sb.rest_select(
+            "thread_members",
+            "&".join(
+                [
+                    f"thread_id=eq.{quote(thread_id)}",
+                    "select=user_id,role",
+                ]
+            ),
+            access_token,
+        )
+        inherited_rows = sb.rest_select(
+            "thread_members",
+            "&".join(
+                [
+                    f"thread_id=in.({safe_lineage_ids})",
+                    "select=thread_id,user_id",
+                ]
+            ),
+            access_token,
+        )
+        existing_pairs = {
+            (str(row.get("thread_id")), str(row.get("user_id")))
+            for row in inherited_rows
+            if row.get("thread_id") and row.get("user_id")
+        }
+        rows_to_inherit = [
+            {
+                "thread_id": descendant_id,
+                "user_id": member["user_id"],
+                "role": member.get("role") or "member",
+            }
+            for descendant_id in lineage_ids
+            if descendant_id != thread_id
+            for member in root_members
+            if member.get("user_id")
+            and (descendant_id, str(member["user_id"])) not in existing_pairs
+        ]
+        if rows_to_inherit:
+            try:
+                sb.rest_insert("thread_members", rows_to_inherit, access_token)
+            except requests.HTTPError as exc:
+                if not exc.response or exc.response.status_code != 409:
+                    raise
+
     return {
         "thread_id": thread_id,
         "is_workspace": True,
@@ -442,6 +503,15 @@ def list_thread_members(
     current_user_id = user.get("id")
     if not current_user_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
+
+    if not is_branch_root(thread_id, access_token):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "WORKSPACE_ROOT_ONLY",
+                "message": "브랜치 하위 스레드에는 워크스페이스 멤버 기능이 없습니다.",
+            },
+        )
 
     # Check ownership/membership
     q_thread = "&".join([f"id=eq.{quote(thread_id)}", "select=owner_id", "limit=1"])

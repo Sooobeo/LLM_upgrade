@@ -1,6 +1,6 @@
 from typing import List
 from urllib.parse import quote
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -9,8 +9,11 @@ from app.schemas.comment import (
     BranchCommentResponse,
     BranchCommentUpdate,
     CommentCreate,
+    CommentResponse,
+    CommentUpdate,
 )
 from app.repository.comment import (
+    BRANCH_COMMENT_MESSAGE_INDEX,
     BranchCommentForbiddenError,
     BranchCommentNotFoundError,
     create_branch_comment,
@@ -186,7 +189,18 @@ def remove_branch_comment(
     return {"ok": True}
 
 
-@router.post("/{thread_id}/comments")
+def _normalize_message_comments(comments, user) -> None:
+    current_user_id = _owner_id(user)
+    _normalize_comment_authors(comments, user)
+    for comment in comments:
+        comment["can_edit"] = str(comment.get("user_id") or "") == current_user_id
+
+
+@router.post(
+    "/{thread_id}/comments",
+    response_model=CommentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_comment(
     thread_id: str,
     body: CommentCreate,
@@ -196,9 +210,11 @@ def create_comment(
     owner_id = _owner_id(user)
     if not _accessible_thread_ids(owner_id, [thread_id], access_token):
         raise HTTPException(status_code=404, detail="Thread not found")
-    inserted = sb.rest_insert(
+    comment_id = str(uuid4())
+    sb.rest_insert(
         "comments",
         [{
+            "id": comment_id,
             "thread_id": thread_id,
             "user_id": owner_id,
             "message_index": body.message_index,
@@ -206,34 +222,90 @@ def create_comment(
         }],
         access_token,
     )
-    comment = inserted[0] if isinstance(inserted, list) and inserted else inserted
-
-    if not comment:
+    comments = sb.rest_select(
+        "comments",
+        "&".join(
+            [
+                f"id=eq.{quote(comment_id)}",
+                f"thread_id=eq.{quote(thread_id)}",
+                f"user_id=eq.{quote(owner_id)}",
+                "select=id,thread_id,message_index,user_id,content,created_at",
+                "limit=1",
+            ]
+        ),
+        access_token,
+    )
+    if not comments:
         raise HTTPException(status_code=400, detail="코멘트 생성 실패")
 
+    comment = comments[0]
+    _normalize_message_comments([comment], user)
     return comment
 
 
-@router.get("/{thread_id}/comments")
+@router.get("/{thread_id}/comments", response_model=List[CommentResponse])
 def get_comments(
     thread_id: str,
-    message_index: int,
+    message_index: int | None = Query(
+        default=None,
+        ge=0,
+        lt=2_147_483_647,
+    ),
     user=Depends(get_current_user),
     access_token: str = Depends(get_access_token),
 ):
     owner_id = _owner_id(user)
     if not _accessible_thread_ids(owner_id, [thread_id], access_token):
         raise HTTPException(status_code=404, detail="Thread not found")
-    return sb.rest_select(
+    filters = [
+        f"thread_id=eq.{quote(thread_id)}",
+        f"message_index=lt.{BRANCH_COMMENT_MESSAGE_INDEX}",
+        "select=id,thread_id,message_index,user_id,content,created_at",
+        "order=message_index.asc,created_at.asc",
+    ]
+    if message_index is not None:
+        filters.insert(1, f"message_index=eq.{message_index}")
+    comments = sb.rest_select(
         "comments",
-        "&".join([
-            f"thread_id=eq.{quote(thread_id)}",
-            f"message_index=eq.{message_index}",
-            "select=id,thread_id,message_index,user_id,content,created_at",
-            "order=created_at.asc",
-        ]),
+        "&".join(filters),
         access_token,
     )
+    _normalize_message_comments(comments, user)
+    return comments
+
+
+@router.patch(
+    "/{thread_id}/comments/{comment_id}",
+    response_model=CommentResponse,
+)
+def update_comment(
+    thread_id: str,
+    comment_id: UUID,
+    body: CommentUpdate,
+    user=Depends(get_current_user),
+    access_token: str = Depends(get_access_token),
+):
+    owner_id = _owner_id(user)
+    if not _accessible_thread_ids(owner_id, [thread_id], access_token):
+        raise HTTPException(status_code=404, detail="Thread not found")
+    updated = sb.rest_update(
+        "comments",
+        "&".join(
+            [
+                f"id=eq.{quote(str(comment_id))}",
+                f"thread_id=eq.{quote(thread_id)}",
+                f"user_id=eq.{quote(owner_id)}",
+                f"message_index=lt.{BRANCH_COMMENT_MESSAGE_INDEX}",
+            ]
+        ),
+        {"content": body.content.strip()},
+        access_token,
+    )
+    comment = updated[0] if isinstance(updated, list) and updated else None
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    _normalize_message_comments([comment], user)
+    return comment
 
 
 @router.delete("/{thread_id}/comments/{comment_id}")
@@ -249,6 +321,7 @@ def delete_comment(
             f"id=eq.{quote(comment_id)}",
             f"thread_id=eq.{quote(thread_id)}",
             f"user_id=eq.{quote(_owner_id(user))}",
+            f"message_index=lt.{BRANCH_COMMENT_MESSAGE_INDEX}",
         ]),
         access_token,
     )

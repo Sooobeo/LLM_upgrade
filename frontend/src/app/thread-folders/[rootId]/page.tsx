@@ -10,6 +10,7 @@ import {
   Pencil,
   Search,
   Trash2,
+  Users,
   X,
 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
@@ -18,6 +19,8 @@ import { useEffect, useMemo, useState } from "react";
 import { InlineLoginPrompt } from "@/components/InlineLoginPrompt";
 import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
 import { getSupabaseToken } from "@/lib/apiFetch";
+import { WorkspaceMembersModal } from "@/components/WorkspaceMembersModal";
+import { WorkspaceModal } from "@/components/WorkspaceModal";
 import {
   BranchNode,
   deleteThread,
@@ -40,6 +43,8 @@ export default function ThreadFolderPage() {
   const [folderError, setFolderError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BranchNode | null>(null);
   const [deleteSuccessOpen, setDeleteSuccessOpen] = useState(false);
+  const [workspaceCreateOpen, setWorkspaceCreateOpen] = useState(false);
+  const [workspaceMembersOpen, setWorkspaceMembersOpen] = useState(false);
   const [returnToThreadsAfterDelete, setReturnToThreadsAfterDelete] =
     useState(false);
 
@@ -276,6 +281,22 @@ export default function ThreadFolderPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  {(root.is_workspace || root.can_manage_workspace) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (root.is_workspace) {
+                          setWorkspaceMembersOpen(true);
+                        } else {
+                          setWorkspaceCreateOpen(true);
+                        }
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-indigo-300/25 bg-indigo-300/10 px-3 py-2 text-xs font-bold text-indigo-100 transition hover:bg-indigo-300/20"
+                    >
+                      <Users size={14} />
+                      {root.is_workspace ? "멤버 관리" : "워크스페이스로 전환"}
+                    </button>
+                  )}
                   <div className="flex items-center gap-2 rounded-full border border-amber-200/20 bg-amber-200/10 px-4 py-2 text-sm font-semibold text-amber-50">
                     <GitBranch size={16} />
                     스레드 {nodes.length}개
@@ -378,6 +399,27 @@ export default function ThreadFolderPage() {
           </div>
         )}
       </section>
+
+      {workspaceCreateOpen && root && (
+        <WorkspaceModal
+          threadId={root.id}
+          onClose={() => setWorkspaceCreateOpen(false)}
+          onSuccess={() => {
+            setWorkspaceCreateOpen(false);
+            setWorkspaceMembersOpen(true);
+            void refetch();
+            void queryClient.invalidateQueries({ queryKey: ["threads"] });
+          }}
+        />
+      )}
+
+      {workspaceMembersOpen && root && (
+        <WorkspaceMembersModal
+          threadId={root.id}
+          canManage={Boolean(root.can_manage_workspace)}
+          onClose={() => setWorkspaceMembersOpen(false)}
+        />
+      )}
 
       <DeleteConfirmModal
         isOpen={Boolean(deleteTarget)}

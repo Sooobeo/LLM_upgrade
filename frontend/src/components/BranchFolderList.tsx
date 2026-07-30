@@ -8,6 +8,7 @@ import {
   HelpCircle,
   Pencil,
   Trash2,
+  Users,
   X,
 } from "lucide-react";
 import { useState } from "react";
@@ -20,6 +21,7 @@ type Props = {
   onOpen: (rootId: string) => void;
   onRename?: (rootId: string, title: string) => void | Promise<void>;
   onDelete?: (rootId: string) => void | Promise<void>;
+  onWorkspace?: (root: BranchNode) => void | Promise<void>;
 };
 
 export function BranchFolderList({
@@ -27,6 +29,7 @@ export function BranchFolderList({
   onOpen,
   onRename,
   onDelete,
+  onWorkspace,
 }: Props) {
   const [helpOpen, setHelpOpen] = useState(false);
   const [editingRootId, setEditingRootId] = useState<string | null>(null);
@@ -195,6 +198,11 @@ export function BranchFolderList({
                     <span>·</span>
                     <span>루트 포함</span>
                   </div>
+                  {root.is_workspace && (
+                    <span className="mt-2 inline-flex rounded-full border border-indigo-300/25 bg-indigo-300/10 px-2 py-0.5 text-[10px] font-bold text-indigo-100">
+                      워크스페이스
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -207,6 +215,17 @@ export function BranchFolderList({
                   <FolderOpen size={16} />
                   열기
                 </button>
+                {onWorkspace &&
+                  (root.is_workspace || root.can_manage_workspace) && (
+                    <button
+                      type="button"
+                      onClick={() => void onWorkspace(root)}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-indigo-300/25 bg-indigo-300/10 px-3 py-2 text-xs font-bold text-indigo-100 transition hover:bg-indigo-300/20"
+                    >
+                      <Users size={14} />
+                      {root.is_workspace ? "멤버 관리" : "워크스페이스로 전환"}
+                    </button>
+                  )}
                 {root.can_manage && onDelete && (
                   <button
                     type="button"

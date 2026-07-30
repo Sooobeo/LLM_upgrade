@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { API_BASE_URL, getSupabaseToken } from "@/lib/apiFetch";
+import { createWorkspace } from "@/lib/threadApi";
 
 type Props = {
   threadId: string;
@@ -24,7 +24,9 @@ export function WorkspaceModal({ threadId, onClose, onSuccess }: Props) {
     setEmailInput("");
   };
 
-  const handleSubmit = async (e?: React.FormEvent<HTMLFormElement> | React.MouseEvent<HTMLButtonElement>) => {
+  const handleSubmit = async (
+    e?: React.FormEvent<HTMLFormElement> | React.MouseEvent<HTMLButtonElement>,
+  ) => {
     e?.preventDefault();
 
     if (emails.length === 0) {
@@ -37,38 +39,22 @@ export function WorkspaceModal({ threadId, onClose, onSuccess }: Props) {
     setInfo(null);
 
     try {
-      const token = await getSupabaseToken();
-      if (!token) {
-        setError("로그인이 필요합니다.");
-        return;
-      }
-
-      const res = await fetch(`${API_BASE_URL}/threads/${threadId}/workspace`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        credentials: "include",
-        body: JSON.stringify({ emails }),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        setError(data?.detail || "워크스페이스 생성 중 오류가 발생했습니다.");
-        return;
-      }
+      const data = await createWorkspace(threadId, emails);
 
       setInfo("워크스페이스가 생성되었습니다.");
 
-      const threadIdFromResp = (data && (data.thread_id || data.id)) || threadId;
+      const threadIdFromResp = data?.thread_id || data?.id || threadId;
       onSuccess?.(threadIdFromResp);
 
       setTimeout(() => {
         onClose();
       }, 800);
-
-    } catch (err: any) {
-      setError(err?.message || "네트워크 오류가 발생했습니다.");
+    } catch (workspaceError) {
+      setError(
+        workspaceError instanceof Error
+          ? workspaceError.message
+          : "워크스페이스 생성 중 오류가 발생했습니다.",
+      );
     } finally {
       setSubmitting(false);
     }

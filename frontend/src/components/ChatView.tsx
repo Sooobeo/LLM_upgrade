@@ -10,13 +10,18 @@ import { MODEL_OPTIONS } from '@/lib/models';
 import {
   addThreadBookmark,
   ChatMessage,
+  createThreadComment,
   createThreadBranch,
+  deleteThreadComment,
   getThread,
   listThreadBookmarks,
+  listThreadComments,
   postChat,
   removeThreadBookmark,
   ThreadBookmark,
   ThreadDetail,
+  ThreadMessageComment,
+  updateThreadComment,
   updateThreadTitle,
 } from '@/lib/threadApi';
 import { getSupabaseToken } from '@/lib/apiFetch';
@@ -87,13 +92,11 @@ export function ChatView() {
   const [token, setToken] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
 
-  const [comments, setComments] = useState<Record<string, string[]>>({});
-  const [commentAuthor, setCommentAuthor] = useState('me');
   const [commentNotice, setCommentNotice] = useState<string | null>(null);
 
   const [editingComment, setEditingComment] = useState<{
     targetId: string;
-    index: number;
+    commentId: string;
   } | null>(null);
 
   const [editingText, setEditingText] = useState('');
@@ -126,55 +129,14 @@ export function ChatView() {
           auth.setToken(next);
           setToken(next);
           setAuthLoading(false);
-          const email = session?.user?.email || '';
-          if (email) setCommentAuthor(email.split('@')[0]);
         })
       : { data: null };
-
-    supabase?.auth.getSession().then(({ data }) => {
-      const email = data.session?.user?.email || '';
-      if (email) setCommentAuthor(email.split('@')[0]);
-    });
 
     return () => {
       active = false;
       subscription?.subscription.unsubscribe();
     };
   }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      const raw = window.localStorage.getItem(`thread_comments_${threadId}`);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        setComments(parsed || {});
-      } else {
-        setComments({});
-      }
-    } catch {
-      setComments({});
-    }
-  }, [threadId]);
-
-  const saveComments = (
-    updater:
-      | Record<string, string[]>
-      | ((prev: Record<string, string[]>) => Record<string, string[]>),
-  ) => {
-    setComments((prev) => {
-      const next = typeof updater === 'function' ? updater(prev) : updater;
-      if (typeof window !== 'undefined') {
-        try {
-          window.localStorage.setItem(
-            `thread_comments_${threadId}`,
-            JSON.stringify(next),
-          );
-        } catch {}
-      }
-      return next;
-    });
-  };
 
   const resolveCommentTargetId = (message: ChatMessage, idx: number) => {
     if (message.id) return `id:${message.id}`;
@@ -196,67 +158,92 @@ export function ChatView() {
       : `msg-idx-${idx}`;
   };
 
-  const addComment = (targetId: string, text: string) => {
-    const val = text.trim();
-    if (!val) return;
-
-    saveComments((prev) => {
-      const next = { ...prev };
-      const key = String(targetId);
-      next[key] = [...(next[key] || []), `${commentAuthor}: ${val}`];
-      return next;
-    });
-
-    setCommentNotice(
-      'Comments are saved locally in this build (backend comments API is not wired).',
-    );
-  };
-
-  const deleteComment = (targetId: string, commentIndex: number) => {
-    saveComments((prev) => {
-      const next = { ...prev };
-      const arr = [...(next[targetId] || [])];
-      arr.splice(commentIndex, 1);
-
-      if (arr.length === 0) {
-        delete next[targetId];
-      } else {
-        next[targetId] = arr;
-      }
-
-      return next;
-    });
-  };
-
-  const startEditComment = (targetId: string, index: number, text: string) => {
-    setEditingComment({ targetId, index });
+  const startEditComment = (
+    targetId: string,
+    comment: ThreadMessageComment,
+  ) => {
+    setEditingComment({ targetId, commentId: comment.id });
 
     // "username: 내용" → 내용만 추출
-    const [, content] = text.split(': ');
-    setEditingText(content || text);
-  };
-
-  const saveEditComment = () => {
-    if (!editingComment) return;
-
-    const { targetId, index } = editingComment;
-
-    saveComments((prev) => {
-      const next = { ...prev };
-      const arr = [...(next[targetId] || [])];
-
-      arr[index] = `${commentAuthor}: ${editingText}`;
-
-      next[targetId] = arr;
-      return next;
-    });
-
-    setEditingComment(null);
-    setEditingText('');
+    setEditingText(comment.content);
   };
 
   const isValidThreadId = useMemo(() => UUID_REGEX.test(threadId), [threadId]);
   const isThreadScreen = !!threadId;
+
+  const { data: commentRows = [] } = useQuery<ThreadMessageComment[]>({
+    queryKey: ['thread-comments', threadId],
+    queryFn: () => listThreadComments(threadId, token!),
+    retry: false,
+    enabled: isValidThreadId && !!token,
+  });
+
+  const comments = useMemo(() => {
+    const grouped: Record<string, ThreadMessageComment[]> = {};
+    commentRows.forEach((comment) => {
+      const key = `index:${comment.message_index}`;
+      grouped[key] = [...(grouped[key] || []), comment];
+    });
+    return grouped;
+  }, [commentRows]);
+
+  const refreshComments = () =>
+    queryClient.invalidateQueries({
+      queryKey: ['thread-comments', threadId],
+    });
+
+  const addComment = async (messageIndex: number, text: string) => {
+    const content = text.trim();
+    if (!content || !token) return;
+    try {
+      await createThreadComment(threadId, messageIndex, content, token);
+      await refreshComments();
+      setCommentNotice('코멘트가 저장되었습니다.');
+    } catch (commentError) {
+      setCommentNotice(
+        commentError instanceof Error
+          ? commentError.message
+          : '코멘트를 저장하지 못했습니다.',
+      );
+    }
+  };
+
+  const deleteComment = async (comment: ThreadMessageComment) => {
+    if (!token || !comment.can_edit) return;
+    try {
+      await deleteThreadComment(threadId, comment.id, token);
+      await refreshComments();
+      setCommentNotice('코멘트가 삭제되었습니다.');
+    } catch (commentError) {
+      setCommentNotice(
+        commentError instanceof Error
+          ? commentError.message
+          : '코멘트를 삭제하지 못했습니다.',
+      );
+    }
+  };
+
+  const saveEditComment = async () => {
+    if (!editingComment || !token || !editingText.trim()) return;
+    try {
+      await updateThreadComment(
+        threadId,
+        editingComment.commentId,
+        editingText.trim(),
+        token,
+      );
+      await refreshComments();
+      setEditingComment(null);
+      setEditingText('');
+      setCommentNotice('코멘트가 수정되었습니다.');
+    } catch (commentError) {
+      setCommentNotice(
+        commentError instanceof Error
+          ? commentError.message
+          : '코멘트를 수정하지 못했습니다.',
+      );
+    }
+  };
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['thread', threadId],
@@ -875,10 +862,15 @@ export function ChatView() {
                 {messages.map((m, idx) => {
                   const commentTargetId = resolveCommentTargetId(m, idx);
                   const isMessageBlock = typeof m?.content === 'string';
-                  const showCommentUI =
-                    isThreadScreen && isMessageBlock && !!commentTargetId;
-                  const messageComments = comments[commentTargetId] || [];
                   const messageIndex = resolveMessageIndex(m);
+                  const showCommentUI =
+                    isWorkspace &&
+                    isThreadScreen &&
+                    isMessageBlock &&
+                    m.role === 'assistant' &&
+                    !!commentTargetId &&
+                    messageIndex != null;
+                  const messageComments = comments[commentTargetId] || [];
                   const isBookmarked =
                     messageIndex != null &&
                     bookmarkedIndexSet.has(messageIndex);
@@ -939,15 +931,15 @@ export function ChatView() {
                               </div>
                             )}
                             <div className="space-y-1">
-                              {messageComments.map((c, ci) => {
+                              {messageComments.map((comment) => {
                                 const isEditing =
                                   editingComment?.targetId ===
                                     commentTargetId &&
-                                  editingComment?.index === ci;
+                                  editingComment?.commentId === comment.id;
 
                                 return (
                                   <div
-                                    key={ci}
+                                    key={comment.id}
                                     className="rounded-lg bg-white/10 px-2 py-1 text-xs text-white/80"
                                   >
                                     {isEditing ? (
@@ -961,7 +953,9 @@ export function ChatView() {
                                         />
 
                                         <button
-                                          onClick={saveEditComment}
+                                          onClick={() =>
+                                            void saveEditComment()
+                                          }
                                           className="text-green-300 hover:text-green-200"
                                         >
                                           <Check size={14} />
@@ -978,31 +972,37 @@ export function ChatView() {
                                       </div>
                                     ) : (
                                       <div className="flex items-center justify-between gap-2">
-                                        <span>{c}</span>
+                                        <span className="min-w-0 break-words">
+                                          <strong className="mr-1 text-cyan-200">
+                                            {comment.author_id || '사용자'}:
+                                          </strong>
+                                          {comment.content}
+                                        </span>
 
-                                        <div className="flex gap-1">
-                                          <button
-                                            onClick={() =>
-                                              startEditComment(
-                                                commentTargetId,
-                                                ci,
-                                                c,
-                                              )
-                                            }
-                                            className="text-blue-300 hover:text-blue-200"
-                                          >
-                                            <Pencil size={14} />
-                                          </button>
+                                        {comment.can_edit && (
+                                          <div className="flex shrink-0 gap-1">
+                                            <button
+                                              onClick={() =>
+                                                startEditComment(
+                                                  commentTargetId,
+                                                  comment,
+                                                )
+                                              }
+                                              className="text-blue-300 hover:text-blue-200"
+                                            >
+                                              <Pencil size={14} />
+                                            </button>
 
-                                          <button
-                                            onClick={() =>
-                                              deleteComment(commentTargetId, ci)
-                                            }
-                                            className="text-red-300 hover:text-red-200"
-                                          >
-                                            <Trash2 size={14} />
-                                          </button>
-                                        </div>
+                                            <button
+                                              onClick={() =>
+                                                void deleteComment(comment)
+                                              }
+                                              className="text-red-300 hover:text-red-200"
+                                            >
+                                              <Trash2 size={14} />
+                                            </button>
+                                          </div>
+                                        )}
                                       </div>
                                     )}
                                   </div>
@@ -1012,7 +1012,9 @@ export function ChatView() {
 
                             <WorkspaceCommentInput
                               onAdd={(text) => {
-                                addComment(commentTargetId, text);
+                                if (messageIndex != null) {
+                                  void addComment(messageIndex, text);
+                                }
                               }}
                             />
                           </div>

@@ -27,6 +27,9 @@ class ThreadSummary(BaseModel):
     id: str
     title: str
     created_at: str
+    is_workspace: bool = False
+    workspace_role: Optional[str] = None
+    can_manage_workspace: bool = False
     message_count: int
     last_message_preview: Optional[str] = None
 
@@ -44,6 +47,8 @@ class ThreadDetailResp(BaseModel):
     title: str
     created_at: str
     is_workspace: bool
+    workspace_role: Optional[str] = None
+    can_manage_workspace: bool = False
     can_rename: bool = False
     messages: List[MessageOut]
     parent_thread_id: Optional[str] = None
@@ -115,6 +120,9 @@ class BranchNode(BaseModel):
     is_deleted: bool = False
     is_tutorial: bool = False
     can_manage: bool = False
+    is_workspace: bool = False
+    workspace_role: Optional[str] = None
+    can_manage_workspace: bool = False
     children: List["BranchNode"] = Field(default_factory=list)
 
 

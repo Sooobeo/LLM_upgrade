@@ -96,7 +96,7 @@ class ThreadBranchRepositoryTests(unittest.IsolatedAsyncioTestCase):
                     requested_model="gemini-2.5-flash",
                 )
 
-    async def test_create_branch_copies_workspace_members_to_child(self):
+    async def test_create_branch_keeps_child_non_workspace_and_inherits_access(self):
         inserted = []
 
         def select(table, query, access_token):
@@ -157,7 +157,7 @@ class ThreadBranchRepositoryTests(unittest.IsolatedAsyncioTestCase):
             rows for table, rows in inserted if table == "thread_members"
         ][0]
         self.assertEqual(result["title"], "공유 대화")
-        self.assertTrue(child_thread["is_workspace"])
+        self.assertFalse(child_thread["is_workspace"])
         self.assertEqual(
             {row["user_id"] for row in copied_members},
             {"owner-1", "member-1"},
@@ -301,6 +301,71 @@ class ThreadBranchRepositoryTests(unittest.IsolatedAsyncioTestCase):
             roots[0]["children"][0]["children"][0]["thread_id"],
             "grandchild",
         )
+
+    def test_workspace_member_sees_complete_tree_but_only_root_is_workspace(self):
+        root_meta = repository._encode_branch_metadata(
+            {
+                "version": 1,
+                "parent_thread_id": None,
+                "root_thread_id": "root",
+                "model": "gemini-2.5-flash",
+            }
+        )
+        child_meta = repository._encode_branch_metadata(
+            {
+                "version": 1,
+                "parent_thread_id": "root",
+                "root_thread_id": "root",
+                "model": "gemini-2.5-flash",
+            }
+        )
+
+        def select(table, query, access_token):
+            if table == "thread_members":
+                return [
+                    {"thread_id": "root", "role": "member"},
+                    {"thread_id": "child", "role": "member"},
+                ]
+            if table == "threads" and "owner_id=eq.member-1" in query:
+                return []
+            if table == "threads":
+                return [
+                    {
+                        "id": "root",
+                        "title": "공유 루트",
+                        "created_at": "1",
+                        "owner_id": "owner-1",
+                        "is_workspace": True,
+                    },
+                    {
+                        "id": "child",
+                        "title": "공유 루트",
+                        "created_at": "2",
+                        "owner_id": "owner-1",
+                        # Legacy data can still be true; the API must mask it.
+                        "is_workspace": True,
+                    },
+                ]
+            if table == "messages":
+                return [
+                    {"thread_id": "root", "content": root_meta},
+                    {"thread_id": "child", "content": child_meta},
+                ]
+            return []
+
+        with (
+            patch.object(repository.sb, "rest_select", side_effect=select),
+            patch.object(repository, "_ensure_tutorial_branch"),
+        ):
+            roots = repository.list_branch_trees("member-1", "token")
+
+        self.assertEqual([root["id"] for root in roots], ["root"])
+        self.assertTrue(roots[0]["is_workspace"])
+        self.assertEqual(roots[0]["workspace_role"], "member")
+        self.assertFalse(roots[0]["can_manage_workspace"])
+        self.assertEqual([node["id"] for node in roots[0]["children"]], ["child"])
+        self.assertFalse(roots[0]["children"][0]["is_workspace"])
+        self.assertIsNone(roots[0]["children"][0]["workspace_role"])
 
     def test_message_context_query_excludes_hidden_marker(self):
         with patch.object(repository.sb, "rest_select", return_value=[]) as select:

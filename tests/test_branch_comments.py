@@ -8,6 +8,29 @@ from app.routes import comment as comment_routes
 
 
 class BranchCommentRepositoryTests(unittest.TestCase):
+    def test_inherited_member_can_access_non_workspace_branch_child(self):
+        def select(table, query, access_token):
+            if table == "threads":
+                return [
+                    {
+                        "id": "child-1",
+                        "owner_id": "owner-1",
+                        "is_workspace": False,
+                    }
+                ]
+            if table == "thread_members":
+                return [{"thread_id": "child-1"}]
+            return []
+
+        with patch.object(repository.sb, "rest_select", side_effect=select):
+            accessible = repository._accessible_thread_ids(
+                "member-1",
+                ["child-1"],
+                "token",
+            )
+
+        self.assertEqual(accessible, ["child-1"])
+
     def test_branch_comment_payload_round_trip_preserves_unicode_and_position(self):
         encoded = repository._encode_branch_comment("  중요한 코멘트  ", 120.5, 44)
         decoded = repository._decode_branch_comment(
