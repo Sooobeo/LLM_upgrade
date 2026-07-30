@@ -1,4 +1,4 @@
-import { auth } from "./auth";
+import { auth, expireSessionAndRedirect } from "./auth";
 
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000";
@@ -47,11 +47,17 @@ export async function refreshBackendAccessToken(): Promise<string | null> {
       });
       if (!response.ok) {
         auth.clear();
+        if (response.status === 401) expireSessionAndRedirect();
         return null;
       }
       const data = await response.json();
       const token = data?.access_token || null;
-      if (token) auth.setToken(token);
+      if (token) {
+        auth.setToken(token);
+      } else {
+        auth.clear();
+        expireSessionAndRedirect();
+      }
       return token;
     } catch {
       return null;
@@ -141,6 +147,7 @@ export async function apiFetch(
     err.bodySnippet = snippet;
     if (res.status === 401) {
       err.code = "NO_TOKEN";
+      expireSessionAndRedirect();
     }
     throw err;
   }

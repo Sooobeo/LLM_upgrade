@@ -1,4 +1,4 @@
-import { auth } from "./auth";
+import { auth, expireSessionAndRedirect } from "./auth";
 import { API_BASE_URL, getSupabaseToken } from "./apiFetch";
 
 function buildUrl(path: string) {
@@ -86,9 +86,7 @@ export async function apiClient(
   else {
     const notLoggedIn: any = new Error("Not logged in");
     notLoggedIn.status = 401;
-    if (typeof window !== "undefined") {
-      window.location.replace("/login");
-    }
+    expireSessionAndRedirect();
     throw notLoggedIn;
   }
 
@@ -125,9 +123,7 @@ export async function apiClient(
     error.bodySnippet = snippet;
     error.hasAuth = hasAuth;
     error.threadId = meta?.threadId;
-    if (response.status === 401 && typeof window !== "undefined") {
-      window.location.replace("/login");
-    }
+    if (response.status === 401) expireSessionAndRedirect();
     throw error;
   }
 

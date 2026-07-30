@@ -1,4 +1,4 @@
-import { auth } from "./auth";
+import { auth, expireSessionAndRedirect } from "./auth";
 import { API_BASE_URL, refreshBackendAccessToken } from "./apiFetch";
 
 function buildUrl(path: string) {
@@ -135,6 +135,7 @@ async function apiFetchInternal(
     const error: any = new Error(safeMessage);
     error.status = response.status;
     error.payload = data;
+    if (response.status === 401) expireSessionAndRedirect();
     throw error;
   }
 
