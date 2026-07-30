@@ -205,6 +205,7 @@ def update_branch_comment(
     content: Optional[str] = None,
     position_x: Optional[float] = None,
     position_y: Optional[float] = None,
+    author_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     rows = sb.rest_select(
         "comments",
@@ -230,7 +231,7 @@ def update_branch_comment(
         next_content,
         next_x,
         next_y,
-        author_id=existing["author_id"],
+        author_id=author_id or existing["author_id"],
     )
     updated_rows = sb.rest_update(
         "comments",

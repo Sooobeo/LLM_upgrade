@@ -21,6 +21,7 @@ from app.repository.comment import (
 )
 from app.db import supabase as sb
 from app.db.deps import get_access_token, get_current_user
+from app.db.supabase_users import get_users_by_ids
 
 router = APIRouter(prefix="/threads", tags=["comments"])
 branch_router = APIRouter(prefix="/branch-comments", tags=["branch-comments"])
@@ -31,6 +32,50 @@ def _owner_id(user) -> str:
     if not owner_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
     return owner_id
+
+
+def _email_id(email: object) -> str:
+    if not isinstance(email, str):
+        return ""
+    normalized = email.strip()
+    if not normalized:
+        return ""
+    return normalized.split("@", 1)[0] if "@" in normalized else normalized
+
+
+def _author_id(user) -> str:
+    return _email_id(user.get("email")) or "사용자"
+
+
+def _normalize_comment_authors(comments, user) -> None:
+    current_user_id = _owner_id(user)
+    current_author_id = _author_id(user)
+    other_user_ids = list(
+        {
+            str(comment.get("user_id"))
+            for comment in comments
+            if comment.get("user_id")
+            and str(comment.get("user_id")) != current_user_id
+        }
+    )
+    try:
+        user_map = get_users_by_ids(other_user_ids) if other_user_ids else {}
+    except Exception:
+        # New comments already carry the display id in their encoded payload.
+        # Keep listing available if the optional admin lookup is unavailable.
+        user_map = {}
+
+    for comment in comments:
+        user_id = str(comment.get("user_id") or "")
+        if user_id == current_user_id:
+            comment["author_id"] = current_author_id
+            continue
+        email = user_map.get(user_id, {}).get("email")
+        resolved = _email_id(email)
+        stored = str(comment.get("author_id") or "")
+        comment["author_id"] = resolved or (
+            stored if stored and stored != user_id else "사용자"
+        )
 
 
 @branch_router.get("", response_model=List[BranchCommentResponse])
@@ -47,6 +92,7 @@ def get_branch_comments(
     )
     for comment in comments:
         comment["can_edit"] = comment["user_id"] == owner_id
+    _normalize_comment_authors(comments, user)
     return comments
 
 
@@ -68,7 +114,7 @@ def add_branch_comment(
             body.position_x,
             body.position_y,
             access_token,
-            author_id=user.get("id"),
+            author_id=_author_id(user),
         )
         comment["can_edit"] = True
         return comment
@@ -77,7 +123,7 @@ def add_branch_comment(
             status_code=403,
             detail={
                 "code": "BRANCH_COMMENT_FORBIDDEN",
-                "message": "You can only comment on your own branch nodes.",
+                "message": "접근할 수 있는 브랜치 노드에만 코멘트를 작성할 수 있습니다.",
             },
         )
     except BranchCommentNotFoundError:
@@ -85,7 +131,7 @@ def add_branch_comment(
             status_code=500,
             detail={
                 "code": "BRANCH_COMMENT_SAVE_FAILED",
-                "message": "The comment was not saved.",
+                "message": "코멘트를 저장하지 못했습니다.",
             },
         )
 
@@ -105,6 +151,7 @@ def edit_branch_comment(
             content=body.content,
             position_x=body.position_x,
             position_y=body.position_y,
+            author_id=_author_id(user),
         )
         comment["can_edit"] = True
         return comment
@@ -113,7 +160,7 @@ def edit_branch_comment(
             status_code=404,
             detail={
                 "code": "BRANCH_COMMENT_NOT_FOUND",
-                "message": "Comment not found.",
+                "message": "코멘트를 찾을 수 없습니다.",
             },
         )
 
@@ -133,7 +180,7 @@ def remove_branch_comment(
             status_code=404,
             detail={
                 "code": "BRANCH_COMMENT_NOT_FOUND",
-                "message": "Comment not found.",
+                "message": "코멘트를 찾을 수 없습니다.",
             },
         )
     return {"ok": True}

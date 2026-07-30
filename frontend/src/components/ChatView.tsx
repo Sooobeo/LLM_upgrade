@@ -33,6 +33,24 @@ type BookmarkToggleVars = {
   nextBookmarked: boolean;
 };
 
+function ChatLoading({ label }: { label: string }) {
+  return (
+    <div className="fixed inset-0 flex items-center justify-center bg-gradient-to-b from-[#0c1424] via-[#0d1b33] to-[#0a1022] px-6 text-white">
+      <div
+        role="status"
+        aria-live="polite"
+        className="rounded-2xl border border-white/10 bg-white/5 px-7 py-6 text-center shadow-2xl backdrop-blur"
+      >
+        <span
+          aria-hidden="true"
+          className="mx-auto block h-8 w-8 animate-spin rounded-full border-[3px] border-cyan-200/20 border-t-cyan-300 shadow-[0_0_18px_rgba(103,232,249,0.25)]"
+        />
+        <p className="mt-4 text-sm font-medium text-blue-100">{label}</p>
+      </div>
+    </div>
+  );
+}
+
 export function ChatView() {
   const params = useParams();
   const router = useRouter();
@@ -619,10 +637,10 @@ export function ChatView() {
 
   if (!isValidThreadId) {
     return (
-      <div className="flex h-full flex-col gap-2 rounded-2xl border border-red-200 bg-red-50 p-4 text-red-700">
-        <div className="font-semibold">Invalid thread id</div>
+      <div className="flex h-full flex-col gap-2 rounded-2xl border border-rose-300/25 bg-rose-500/10 p-4 text-rose-100">
+        <div className="font-semibold">잘못된 스레드 주소입니다</div>
         <div className="text-sm">
-          The provided thread id is not a valid UUID.
+          스레드 식별자 형식이 올바르지 않습니다.
         </div>
         {process.env.NODE_ENV !== 'production' && (
           <div className="text-xs text-red-600">
@@ -634,51 +652,43 @@ export function ChatView() {
   }
 
   if (authLoading) {
-    return (
-      <div className="flex h-full items-center justify-center text-slate-600">
-        Checking session...
-      </div>
-    );
+    return <ChatLoading label="로그인 상태를 확인하는 중입니다..." />;
   }
 
   if (!token) {
     return (
       <InlineLoginPrompt
-        title="Sign in to view this thread"
-        message="Login to load messages and continue."
+        title="스레드를 열려면 로그인하세요"
+        message="로그인하면 저장된 메시지를 불러와 대화를 이어갈 수 있습니다."
       />
     );
   }
 
   if (isLoading) {
-    return (
-      <div className="flex h-full items-center justify-center text-slate-600">
-        Loading thread...
-      </div>
-    );
+    return <ChatLoading label="스레드를 불러오는 중입니다..." />;
   }
 
   if ((error as any)?.status === 401) {
     return (
       <InlineLoginPrompt
-        title="Session expired"
-        message="Please sign in again to view this thread."
+        title="로그인 세션이 만료되었습니다"
+        message="이 스레드를 보려면 다시 로그인해 주세요."
       />
     );
   }
 
   if ((error as any)?.status === 404) {
     return (
-      <div className="flex h-full items-center justify-center text-slate-700">
-        Not found or no access.
+      <div className="flex h-full items-center justify-center text-blue-100">
+        스레드가 없거나 접근 권한이 없습니다.
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex h-full items-center justify-center text-red-600">
-        {(error as any)?.message || 'Failed to load thread'}
+      <div className="flex h-full items-center justify-center text-rose-300">
+        {(error as any)?.message || '스레드를 불러오지 못했습니다.'}
       </div>
     );
   }

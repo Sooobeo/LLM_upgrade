@@ -234,6 +234,12 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
   } | null>(null);
   const ignoreNodeClickRef = useRef<string | null>(null);
   const ignoreCommentClickRef = useRef<string | null>(null);
+  const touchPointsRef = useRef<Map<number, Position>>(new Map());
+  const pinchRef = useRef<{
+    initialDistance: number;
+    initialZoom: number;
+  } | null>(null);
+  const suppressCanvasClickRef = useRef(false);
 
   useEffect(() => {
     setPositions(layout.initialPositions);
@@ -609,17 +615,88 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
     }
   };
 
+  const startCanvasPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== "touch") return;
+    touchPointsRef.current.set(event.pointerId, {
+      x: event.clientX,
+      y: event.clientY,
+    });
+    if (touchPointsRef.current.size !== 2) return;
+
+    const [first, second] = Array.from(touchPointsRef.current.values());
+    pinchRef.current = {
+      initialDistance: Math.max(
+        1,
+        Math.hypot(second.x - first.x, second.y - first.y),
+      ),
+      initialZoom: zoom,
+    };
+    nodeDragRef.current = null;
+    commentDragRef.current = null;
+    suppressCanvasClickRef.current = true;
+  };
+
+  const moveCanvasPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (
+      event.pointerType !== "touch" ||
+      !touchPointsRef.current.has(event.pointerId)
+    ) {
+      return;
+    }
+    touchPointsRef.current.set(event.pointerId, {
+      x: event.clientX,
+      y: event.clientY,
+    });
+    if (!pinchRef.current || touchPointsRef.current.size < 2) return;
+
+    event.preventDefault();
+    const [first, second] = Array.from(touchPointsRef.current.values());
+    const distance = Math.max(
+      1,
+      Math.hypot(second.x - first.x, second.y - first.y),
+    );
+    setZoom(
+      clamp(
+        pinchRef.current.initialZoom *
+          (distance / pinchRef.current.initialDistance),
+        0.6,
+        2,
+      ),
+    );
+  };
+
+  const finishCanvasPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== "touch") return;
+    touchPointsRef.current.delete(event.pointerId);
+    if (touchPointsRef.current.size < 2) {
+      pinchRef.current = null;
+    }
+    if (touchPointsRef.current.size === 0) {
+      window.setTimeout(() => {
+        suppressCanvasClickRef.current = false;
+      }, 250);
+    }
+  };
+
   const selectedComment =
     comments.find((comment) => comment.id === selectedCommentId) || null;
 
   return (
     <div
       ref={viewportRef}
-      className="relative h-[calc(100vh-15rem)] min-h-[520px] w-full select-none overflow-hidden rounded-2xl border border-cyan-300/15 bg-slate-950/45 shadow-inner shadow-cyan-950/30"
+      className="relative h-[calc(100vh-15rem)] min-h-[520px] w-full touch-none select-none overflow-hidden rounded-2xl border border-cyan-300/15 bg-slate-950/45 shadow-inner shadow-cyan-950/30"
       role="tree"
       aria-label={`${root.title || "제목 없는 스레드"} 브랜치 트리`}
+      onPointerDown={startCanvasPointer}
+      onPointerMove={moveCanvasPointer}
+      onPointerUp={finishCanvasPointer}
+      onPointerCancel={finishCanvasPointer}
     >
-      <div className="absolute right-3 top-3 z-30 flex items-center gap-1 rounded-xl border border-white/10 bg-slate-950/85 p-1.5 text-xs font-semibold text-white shadow-lg backdrop-blur">
+      <div
+        aria-label="화면 배율 조절"
+        title="버튼 또는 두 손가락 제스처로 확대·축소"
+        className="absolute right-3 top-3 z-30 flex items-center gap-1 rounded-xl border border-white/10 bg-slate-950/85 p-1.5 text-xs font-semibold text-white shadow-lg backdrop-blur"
+      >
         <button
           type="button"
           onClick={() => setZoom((current) => Math.max(0.6, current - 0.2))}
@@ -809,6 +886,7 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
                 onPointerUp={finishNodeDrag}
                 onPointerCancel={finishNodeDrag}
                 onClick={() => {
+                  if (suppressCanvasClickRef.current) return;
                   if (ignoreNodeClickRef.current === node.id) return;
                   if (node.is_deleted) return;
                   onSelect(node.id);
@@ -896,6 +974,7 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
               onPointerCancel={(event) => void finishCommentDrag(event)}
               onClick={(event) => {
                 event.stopPropagation();
+                if (suppressCanvasClickRef.current) return;
                 if (ignoreCommentClickRef.current === comment.id) return;
                 setSelectedCommentId((current) =>
                   current === comment.id ? null : comment.id,

@@ -4,6 +4,7 @@ import unittest
 from unittest.mock import patch
 
 from app.repository import comment as repository
+from app.routes import comment as comment_routes
 
 
 class BranchCommentRepositoryTests(unittest.TestCase):
@@ -115,6 +116,7 @@ class BranchCommentRepositoryTests(unittest.TestCase):
                 30,
                 40,
                 "token",
+                author_id="insun",
             )
 
         self.assertEqual(result["id"], "comment-1")
@@ -123,6 +125,35 @@ class BranchCommentRepositoryTests(unittest.TestCase):
             repository.BRANCH_COMMENT_MESSAGE_INDEX,
         )
         self.assertEqual(inserted[0]["user_id"], "owner-1")
+        inserted_comment = repository._decode_branch_comment(
+            {
+                **inserted[0],
+                "created_at": None,
+            }
+        )
+        self.assertEqual(inserted_comment["author_id"], "insun")
+
+    def test_comment_author_uses_email_id_without_domain(self):
+        comments = [
+            {"user_id": "owner-1", "author_id": "owner-1"},
+            {"user_id": "member-1", "author_id": "member-1"},
+        ]
+        user = {"id": "owner-1", "email": "owner.name@example.com"}
+
+        with patch.object(
+            comment_routes,
+            "get_users_by_ids",
+            return_value={
+                "member-1": {
+                    "id": "member-1",
+                    "email": "team.member@example.org",
+                }
+            },
+        ):
+            comment_routes._normalize_comment_authors(comments, user)
+
+        self.assertEqual(comments[0]["author_id"], "owner.name")
+        self.assertEqual(comments[1]["author_id"], "team.member")
 
 
 if __name__ == "__main__":
