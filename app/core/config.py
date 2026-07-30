@@ -7,8 +7,13 @@ from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+PRODUCTION_FRONTEND_ORIGIN = "https://happyllm.vercel.app"
+PRODUCTION_OAUTH_CALLBACK_URL = (
+    f"{PRODUCTION_FRONTEND_ORIGIN}/auth/callback"
+)
+
 REQUIRED_CORS_ORIGINS = (
-    "https://happyllm.vercel.app",
+    PRODUCTION_FRONTEND_ORIGIN,
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 )
@@ -43,9 +48,7 @@ class Settings(BaseSettings):
     CORS_ORIGIN_REGEX: str = (
         r"^https://happyllm-[a-z0-9-]+-sooobeo1[.]vercel[.]app$"
     )
-    GOOGLE_OAUTH_REDIRECT_URL: str = (
-        "https://happyllm.vercel.app"
-    )
+    GOOGLE_OAUTH_REDIRECT_URL: str = PRODUCTION_OAUTH_CALLBACK_URL
     TRUSTED_HOSTS: str = "localhost,127.0.0.1,testserver"
     MAX_REQUEST_BODY_BYTES: int = 1_048_576
     AUTH_RATE_LIMIT_PER_MINUTE: int = 20
@@ -138,6 +141,14 @@ class Settings(BaseSettings):
             return True
         pattern = self.cors_origin_regex
         return bool(pattern and re.fullmatch(pattern, normalized))
+
+    @property
+    def google_oauth_redirect_url(self) -> str:
+        # A stale Render variable must never send production users back to
+        # localhost (or to the landing page instead of the callback handler).
+        if self.APP_ENV == AppEnv.prod:
+            return PRODUCTION_OAUTH_CALLBACK_URL
+        return self.GOOGLE_OAUTH_REDIRECT_URL.strip()
 
     @property
     def trusted_hosts(self) -> list[str]:

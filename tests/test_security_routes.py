@@ -169,15 +169,44 @@ def test_production_preview_login_uses_stable_callback(monkeypatch):
 
     assert response.status_code == 200
     assert (
-        "redirect_to=https%3A%2F%2Fhappyllm.vercel.app"
+        "redirect_to=https%3A%2F%2Fhappyllm.vercel.app%2Fauth%2Fcallback"
         in response.json()["authorize_url"]
     )
+
+
+def test_production_login_ignores_stale_localhost_callback(monkeypatch):
+    monkeypatch.setattr(settings, "APP_ENV", AppEnv.prod)
+    monkeypatch.setattr(
+        settings,
+        "GOOGLE_OAUTH_REDIRECT_URL",
+        "http://localhost:3000",
+    )
+
+    response = client.get("/auth/google/url")
+
+    assert response.status_code == 200
+    authorize_url = response.json()["authorize_url"]
+    assert (
+        "redirect_to=https%3A%2F%2Fhappyllm.vercel.app%2Fauth%2Fcallback"
+        in authorize_url
+    )
+    assert "localhost" not in authorize_url
 
 
 def test_google_login_url_rejects_untrusted_redirect():
     response = client.get(
         "/auth/google/url",
         params={"redirect_to": "https://attacker.example/auth/callback"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "INVALID_REDIRECT"
+
+
+def test_google_login_url_rejects_root_page_redirect():
+    response = client.get(
+        "/auth/google/url",
+        params={"redirect_to": "https://happyllm.vercel.app"},
     )
 
     assert response.status_code == 400

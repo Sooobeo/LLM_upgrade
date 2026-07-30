@@ -58,6 +58,11 @@ def _google_authorize_url(redirect_to: Optional[str] = None) -> str:
         if (
             parsed.scheme not in {"http", "https"}
             or not parsed.netloc
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.path.rstrip("/") != "/auth/callback"
+            or bool(parsed.query)
+            or bool(parsed.fragment)
             or not settings.is_allowed_origin(redirect_origin)
         ):
             raise HTTPException(
@@ -68,8 +73,8 @@ def _google_authorize_url(redirect_to: Optional[str] = None) -> str:
                 },
             )
         oauth_redirect_to = redirect_to
-        if settings.APP_ENV.value == "prod" and settings.GOOGLE_OAUTH_REDIRECT_URL:
-            configured_redirect = settings.GOOGLE_OAUTH_REDIRECT_URL.strip()
+        if settings.APP_ENV.value == "prod":
+            configured_redirect = settings.google_oauth_redirect_url
             configured = urlsplit(configured_redirect)
             configured_origin = (
                 f"{configured.scheme}://{configured.netloc}".rstrip("/")
@@ -77,6 +82,11 @@ def _google_authorize_url(redirect_to: Optional[str] = None) -> str:
             if (
                 configured.scheme != "https"
                 or not configured.netloc
+                or configured.username is not None
+                or configured.password is not None
+                or configured.path.rstrip("/") != "/auth/callback"
+                or bool(configured.query)
+                or bool(configured.fragment)
                 or not settings.is_allowed_origin(configured_origin)
             ):
                 raise HTTPException(
@@ -88,6 +98,8 @@ def _google_authorize_url(redirect_to: Optional[str] = None) -> str:
                 )
             oauth_redirect_to = configured_redirect
         query["redirect_to"] = oauth_redirect_to
+    elif settings.APP_ENV.value == "prod":
+        query["redirect_to"] = settings.google_oauth_redirect_url
     return f"{base}/auth/v1/authorize?{urlencode(query)}"
 
 

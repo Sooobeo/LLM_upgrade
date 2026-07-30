@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 
+import { getOAuthCallbackUrl } from "@/lib/oauthRedirect";
 import { SUPABASE_PROJECT_URL } from "@/lib/supabaseClient";
 
 export default function LandingPage() {
@@ -25,10 +26,7 @@ export default function LandingPage() {
       authorizeUrl.searchParams.set("provider", "google");
       authorizeUrl.searchParams.set(
         "redirect_to",
-        window.location.hostname === "localhost" ||
-          window.location.hostname === "127.0.0.1"
-          ? window.location.origin
-          : "https://happyllm.vercel.app",
+        getOAuthCallbackUrl(),
       );
       window.location.assign(authorizeUrl.toString());
     } catch {
