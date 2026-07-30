@@ -14,16 +14,22 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let active = true;
     fetch(`${API_BASE_URL}/auth/refresh`, {
       method: "POST",
       credentials: "include",
     }).then(async (response) => {
       const data = response.ok ? await response.json() : null;
-      if (data?.access_token) {
+      if (active && data?.access_token) {
         auth.setToken(data.access_token);
         router.replace("/threads");
       }
+    }).catch(() => {
+      // The password form remains usable when an existing session cannot be restored.
     });
+    return () => {
+      active = false;
+    };
   }, [router]);
 
   async function handleLogin(event: React.FormEvent) {

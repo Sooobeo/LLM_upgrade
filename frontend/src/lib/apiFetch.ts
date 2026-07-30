@@ -19,6 +19,24 @@ function buildUrl(path: string) {
   return `${API_BASE_URL}${path}`;
 }
 
+function getResponseErrorMessage(text: string, fallback: string): string {
+  if (!text) return fallback;
+  try {
+    const payload = JSON.parse(text);
+    const detail = payload?.detail;
+    if (typeof detail === "string" && detail.trim()) return detail;
+    if (detail && typeof detail === "object") {
+      const message = detail.message || detail.error || detail.msg;
+      if (typeof message === "string" && message.trim()) return message;
+    }
+    const message = payload?.message || payload?.error || payload?.msg;
+    if (typeof message === "string" && message.trim()) return message;
+  } catch {
+    // Plain-text backend responses are already suitable for display.
+  }
+  return text.slice(0, 300) || fallback;
+}
+
 export async function refreshBackendAccessToken(): Promise<string | null> {
   if (refreshPromise) return refreshPromise;
   const request = (async () => {
@@ -60,7 +78,9 @@ export async function apiFetch(
   const method = (options.method || "GET").toUpperCase();
   const url = buildUrl(path);
 
-  const accessToken = token ?? (await getSupabaseToken());
+  // Prefer the newest in-memory token. Components may still hold the token
+  // that was current before a refresh completed.
+  let accessToken = auth.getToken() || token || (await getSupabaseToken());
   if (!accessToken) {
     const err: any = new Error("NO_TOKEN");
     err.code = "NO_TOKEN";
@@ -78,22 +98,33 @@ export async function apiFetch(
       ? JSON.stringify(options.body)
       : options.body;
 
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      ...options,
-      method,
-      headers,
-      body,
-      credentials: "include",
-    });
-  } catch (cause) {
-    const err: any = new Error(
-      `백엔드에 연결할 수 없습니다 (${API_BASE_URL}). 백엔드 서버가 실행 중인지 확인하세요.`,
-    );
-    err.code = "BACKEND_UNREACHABLE";
-    err.cause = cause;
-    throw err;
+  const send = async () => {
+    try {
+      return await fetch(url, {
+        ...options,
+        method,
+        headers,
+        body,
+        credentials: "include",
+      });
+    } catch (cause) {
+      const err: any = new Error(
+        `백엔드에 연결할 수 없습니다 (${API_BASE_URL}). 백엔드 서버가 실행 중인지 확인하세요.`,
+      );
+      err.code = "BACKEND_UNREACHABLE";
+      err.cause = cause;
+      throw err;
+    }
+  };
+
+  let res = await send();
+  if (res.status === 401) {
+    const refreshedToken = await refreshBackendAccessToken();
+    if (refreshedToken) {
+      accessToken = refreshedToken;
+      headers.set("Authorization", `Bearer ${accessToken}`);
+      res = await send();
+    }
   }
 
   const text = await res.text();
@@ -101,7 +132,11 @@ export async function apiFetch(
   onDebug?.({ url, method, status: res.status, hasAuth: true, bodySnippet: snippet });
 
   if (!res.ok) {
-    const err: any = new Error(`Request failed (${res.status}): ${snippet || res.statusText}`);
+    const message = getResponseErrorMessage(
+      text,
+      res.statusText || "요청에 실패했습니다.",
+    );
+    const err: any = new Error(message);
     err.status = res.status;
     err.bodySnippet = snippet;
     if (res.status === 401) {

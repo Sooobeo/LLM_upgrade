@@ -10,14 +10,23 @@ export default function LandingPage() {
   const [showLogin, setShowLogin] = useState(false);
   const containerRef = useRef<HTMLElement | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [googleLoginLoading, setGoogleLoginLoading] = useState(false);
+  const [googleLoginError, setGoogleLoginError] = useState<string | null>(null);
 
   const handleGoogleLogin = () => {
-    const oauthUrl = new URL("/auth/google/login", API_BASE_URL);
-    oauthUrl.searchParams.set(
-      "redirect_to",
-      `${window.location.origin}/auth/callback`,
-    );
-    window.location.assign(oauthUrl.toString());
+    setGoogleLoginLoading(true);
+    setGoogleLoginError(null);
+    try {
+      const oauthUrl = new URL("/auth/google/login", API_BASE_URL);
+      oauthUrl.searchParams.set(
+        "redirect_to",
+        `${window.location.origin}/auth/callback`,
+      );
+      window.location.assign(oauthUrl.toString());
+    } catch {
+      setGoogleLoginLoading(false);
+      setGoogleLoginError("로그인 서버 주소를 확인할 수 없습니다.");
+    }
   };
 
   useEffect(() => {
@@ -146,7 +155,8 @@ export default function LandingPage() {
                 <div className="block mt-2 mb-5 flex flex-col gap-3">
                   <button
                     onClick={handleGoogleLogin}
-                    className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold shadow transition hover:-translate-y-0.5 hover:shadow-md"
+                    disabled={googleLoginLoading}
+                    className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold shadow transition hover:-translate-y-0.5 hover:shadow-md disabled:cursor-wait disabled:opacity-70 disabled:hover:translate-y-0"
                   >
                     <svg
                       className="h-5 w-5"
@@ -171,8 +181,27 @@ export default function LandingPage() {
                       />
                     </svg>
 
-                    <span>Google 계정으로 아카이브 열기</span>
+                    {googleLoginLoading ? (
+                      <>
+                        <span
+                          aria-hidden="true"
+                          className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600"
+                        />
+                        <span>Google 로그인으로 이동 중...</span>
+                      </>
+                    ) : (
+                      <span>Google 계정으로 아카이브 열기</span>
+                    )}
                   </button>
+
+                  {googleLoginError && (
+                    <p
+                      role="alert"
+                      className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700"
+                    >
+                      {googleLoginError}
+                    </p>
+                  )}
 
                   <button
                     onClick={() => router.push("/threads")}
