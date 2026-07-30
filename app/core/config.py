@@ -26,13 +26,15 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "GPT Conversation History Log Server"
     PROJECT_VERSION: str = "0.1.0"
     DESCRIPTION: str = "Conversation history logging backend (FastAPI + Supabase)"
-    OPENAPI_SERVER_URL: str = "http://127.0.0.1:8000"
 
     # --- 환경 구분 ---
     APP_ENV: AppEnv = Field(default=AppEnv.local)
-    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
+    CORS_ORIGINS: str = (
+        "https://happyllm.vercel.app,"
+        "http://localhost:3000,http://127.0.0.1:3000"
+    )
     CORS_ORIGIN_REGEX: str = (
-        r"^https://happyllm(?:-[a-z0-9-]+-sooobeo1)?\.vercel\.app$"
+        r"^https://happyllm-[a-z0-9-]+-sooobeo1[.]vercel[.]app$"
     )
     GOOGLE_OAUTH_REDIRECT_URL: str = (
         "https://happyllm.vercel.app"

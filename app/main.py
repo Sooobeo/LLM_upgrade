@@ -2,7 +2,6 @@ import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.openapi.utils import get_openapi
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.core.config import settings
@@ -81,23 +80,3 @@ if settings.APP_ENV.value != "prod":
             "has_anon_key": bool(settings.SUPABASE_ANON_KEY),
             "has_service_role": bool(settings.SUPABASE_SERVICE_ROLE_KEY),
         }
-
-
-# ==============================
-# 3) OpenAPI server URL customization
-# ==============================
-def custom_openapi():
-    if app.openapi_schema:
-        return app.openapi_schema
-    schema = get_openapi(
-        title=app.title,
-        version=app.version,
-        description=app.description,
-        routes=app.routes,
-    )
-    schema["servers"] = [{"url": settings.OPENAPI_SERVER_URL}]
-    app.openapi_schema = schema
-    return schema
-
-
-app.openapi = custom_openapi
