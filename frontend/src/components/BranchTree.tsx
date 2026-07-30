@@ -186,6 +186,28 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
+function clampPanPosition(
+  position: Position,
+  scale: number,
+  canvasWidth: number,
+  canvasHeight: number,
+  viewportWidth: number,
+  viewportHeight: number,
+) {
+  const horizontalLimit = Math.max(
+    0,
+    (canvasWidth * scale - Math.max(0, viewportWidth - 28)) / 2,
+  );
+  const verticalLimit = Math.max(
+    0,
+    (canvasHeight * scale - Math.max(0, viewportHeight - 28)) / 2,
+  );
+  return {
+    x: clamp(position.x, -horizontalLimit, horizontalLimit),
+    y: clamp(position.y, -verticalLimit, verticalLimit),
+  };
+}
+
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
 }
@@ -217,6 +239,7 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
   const [commentsLoading, setCommentsLoading] = useState(true);
   const [commentError, setCommentError] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [panOffset, setPanOffset] = useState<Position>({ x: 0, y: 0 });
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const [createTargetId, setCreateTargetId] = useState<string | null>(null);
   const [createText, setCreateText] = useState("");
@@ -253,15 +276,28 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
   const ignoreNodeClickRef = useRef<string | null>(null);
   const ignoreCommentClickRef = useRef<string | null>(null);
   const touchPointsRef = useRef<Map<number, Position>>(new Map());
+  const canvasPanRef = useRef<{
+    pointerId: number;
+    originX: number;
+    originY: number;
+    startX: number;
+    startY: number;
+    moved: boolean;
+  } | null>(null);
   const pinchRef = useRef<{
     initialDistance: number;
     initialZoom: number;
+    initialScale: number;
+    initialMidpoint: Position;
+    initialPan: Position;
+    anchorOffset: Position;
   } | null>(null);
   const suppressCanvasClickRef = useRef(false);
 
   useEffect(() => {
     setPositions(layout.initialPositions);
     setZoom(1);
+    setPanOffset({ x: 0, y: 0 });
     setSelectedCommentId(null);
     setEditingCommentId(null);
   }, [layout]);
@@ -382,6 +418,37 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
         )
       : 1;
   const renderScale = Math.max(0.25, Math.min(1.6, fitScale * zoom));
+  const panLimits = {
+    x: Math.max(
+      0,
+      (layout.width * renderScale - Math.max(0, viewportSize.width - 28)) / 2,
+    ),
+    y: Math.max(
+      0,
+      (layout.height * renderScale - Math.max(0, viewportSize.height - 28)) /
+        2,
+    ),
+  };
+  const canPan = panLimits.x > 0 || panLimits.y > 0;
+
+  useEffect(() => {
+    setPanOffset((current) =>
+      clampPanPosition(
+        current,
+        renderScale,
+        layout.width,
+        layout.height,
+        viewportSize.width,
+        viewportSize.height,
+      ),
+    );
+  }, [
+    layout.height,
+    layout.width,
+    renderScale,
+    viewportSize.height,
+    viewportSize.width,
+  ]);
 
   const defaultCommentPosition = (threadId: string) => {
     const nodePosition = positions[threadId] || layout.initialPositions[threadId];
@@ -632,6 +699,7 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
     try {
       await resetBranchNodePositions(threadIds, token);
       setPositions(layout.initialPositions);
+      setPanOffset({ x: 0, y: 0 });
     } catch (error) {
       setCommentError(
         errorMessage(error, "브랜치 위치를 원래대로 돌리지 못했습니다."),
@@ -742,24 +810,73 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
   };
 
   const startCanvasPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (event.pointerType !== "touch") return;
+    if (
+      event.pointerType !== "touch" ||
+      commentsLoading ||
+      positionsLoading
+    ) {
+      return;
+    }
     touchPointsRef.current.set(event.pointerId, {
       x: event.clientX,
       y: event.clientY,
     });
+    const target = event.target as Element;
+    const isInteractive = Boolean(
+      target.closest("button,input,textarea,select,[role='dialog']"),
+    );
+
+    if (touchPointsRef.current.size === 1 && !isInteractive) {
+      canvasPanRef.current = {
+        pointerId: event.pointerId,
+        originX: panOffset.x,
+        originY: panOffset.y,
+        startX: event.clientX,
+        startY: event.clientY,
+        moved: false,
+      };
+      event.currentTarget.setPointerCapture(event.pointerId);
+      return;
+    }
     if (touchPointsRef.current.size !== 2) return;
 
     const [first, second] = Array.from(touchPointsRef.current.values());
+    const midpoint = {
+      x: (first.x + second.x) / 2,
+      y: (first.y + second.y) / 2,
+    };
+    const viewportRect = event.currentTarget.getBoundingClientRect();
     pinchRef.current = {
       initialDistance: Math.max(
         1,
         Math.hypot(second.x - first.x, second.y - first.y),
       ),
       initialZoom: zoom,
+      initialScale: renderScale,
+      initialMidpoint: midpoint,
+      initialPan: panOffset,
+      anchorOffset: {
+        x:
+          midpoint.x -
+          (viewportRect.left + viewportRect.width / 2) -
+          panOffset.x,
+        y:
+          midpoint.y -
+          (viewportRect.top + viewportRect.height / 2) -
+          panOffset.y,
+      },
     };
+    canvasPanRef.current = null;
     nodeDragRef.current = null;
     commentDragRef.current = null;
     suppressCanvasClickRef.current = true;
+    for (const pointerId of touchPointsRef.current.keys()) {
+      try {
+        event.currentTarget.setPointerCapture(pointerId);
+      } catch {
+        // The other pointer may already have ended between touch events.
+      }
+    }
   };
 
   const moveCanvasPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -773,27 +890,85 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
       x: event.clientX,
       y: event.clientY,
     });
-    if (!pinchRef.current || touchPointsRef.current.size < 2) return;
-
-    event.preventDefault();
-    const [first, second] = Array.from(touchPointsRef.current.values());
-    const distance = Math.max(
-      1,
-      Math.hypot(second.x - first.x, second.y - first.y),
-    );
-    setZoom(
-      clamp(
+    if (pinchRef.current && touchPointsRef.current.size >= 2) {
+      event.preventDefault();
+      const [first, second] = Array.from(touchPointsRef.current.values());
+      const midpoint = {
+        x: (first.x + second.x) / 2,
+        y: (first.y + second.y) / 2,
+      };
+      const distance = Math.max(
+        1,
+        Math.hypot(second.x - first.x, second.y - first.y),
+      );
+      const nextZoom = clamp(
         pinchRef.current.initialZoom *
           (distance / pinchRef.current.initialDistance),
         0.6,
         2,
+      );
+      const nextScale = Math.max(
+        0.25,
+        Math.min(1.6, fitScale * nextZoom),
+      );
+      const scaleRatio = nextScale / pinchRef.current.initialScale;
+      const nextPan = {
+        x:
+          pinchRef.current.initialPan.x +
+          (midpoint.x - pinchRef.current.initialMidpoint.x) -
+          pinchRef.current.anchorOffset.x * (scaleRatio - 1),
+        y:
+          pinchRef.current.initialPan.y +
+          (midpoint.y - pinchRef.current.initialMidpoint.y) -
+          pinchRef.current.anchorOffset.y * (scaleRatio - 1),
+      };
+      setZoom(nextZoom);
+      setPanOffset(
+        clampPanPosition(
+          nextPan,
+          nextScale,
+          layout.width,
+          layout.height,
+          viewportSize.width,
+          viewportSize.height,
+        ),
+      );
+      return;
+    }
+
+    const pan = canvasPanRef.current;
+    if (!pan || pan.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    const deltaX = event.clientX - pan.startX;
+    const deltaY = event.clientY - pan.startY;
+    if (Math.abs(deltaX) + Math.abs(deltaY) > 4) {
+      pan.moved = true;
+      suppressCanvasClickRef.current = true;
+    }
+    setPanOffset(
+      clampPanPosition(
+        {
+          x: pan.originX + deltaX,
+          y: pan.originY + deltaY,
+        },
+        renderScale,
+        layout.width,
+        layout.height,
+        viewportSize.width,
+        viewportSize.height,
       ),
     );
   };
 
   const finishCanvasPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerType !== "touch") return;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
     touchPointsRef.current.delete(event.pointerId);
+    if (canvasPanRef.current?.pointerId === event.pointerId) {
+      canvasPanRef.current = null;
+    }
     if (touchPointsRef.current.size < 2) {
       pinchRef.current = null;
     }
@@ -812,9 +987,11 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
         const panelEstimatedHeight = 250;
         const margin = 8;
         const canvasLeft =
-          (viewportSize.width - layout.width * renderScale) / 2;
+          (viewportSize.width - layout.width * renderScale) / 2 +
+          panOffset.x;
         const canvasTop =
-          (viewportSize.height - layout.height * renderScale) / 2;
+          (viewportSize.height - layout.height * renderScale) / 2 +
+          panOffset.y;
         const anchorX =
           canvasLeft + selectedComment.position_x * renderScale;
         const anchorY =
@@ -888,7 +1065,7 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
 
       <div
         aria-label="화면 배율 조절"
-        title="버튼 또는 두 손가락 제스처로 확대·축소"
+        title="두 손가락으로 확대·축소하고 빈 공간을 밀어서 이동"
         className="absolute right-2 top-2 z-30 flex items-center gap-1 rounded-xl border border-white/10 bg-slate-950/85 p-1 text-xs font-semibold text-white shadow-lg backdrop-blur sm:right-3 sm:top-3 sm:p-1.5"
       >
         <button
@@ -916,6 +1093,7 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
           type="button"
           onClick={() => {
             setZoom(1);
+            setPanOffset({ x: 0, y: 0 });
           }}
           className="min-h-9 rounded-lg border border-white/15 px-2 py-1.5 text-[10px] text-white/80 transition hover:bg-white/10 sm:px-2.5 sm:text-[11px]"
         >
@@ -925,7 +1103,9 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
       </div>
 
       <div className="pointer-events-none absolute bottom-2 left-2 z-30 max-w-[calc(100%-1rem)] truncate rounded-full border border-white/10 bg-slate-950/75 px-2.5 py-1.5 text-[10px] font-medium text-cyan-100/80 backdrop-blur sm:bottom-3 sm:left-3 sm:px-3">
-        {layout.edges.length}개 브랜치 · {comments.length}개 코멘트
+        {canPan
+          ? "빈 공간을 밀어서 화면 이동"
+          : `${layout.edges.length}개 브랜치 · ${comments.length}개 코멘트`}
         {commentsLoading ? " · 불러오는 중" : ""}
         {positionsLoading ? " · 위치 불러오는 중" : ""}
       </div>
@@ -950,6 +1130,8 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
       <div
         className="absolute left-1/2 top-1/2 origin-center rounded-xl"
         style={{
+          left: `calc(50% + ${panOffset.x}px)`,
+          top: `calc(50% + ${panOffset.y}px)`,
           width: layout.width,
           height: layout.height,
           transform: `translate(-50%, -50%) scale(${renderScale})`,
