@@ -140,9 +140,9 @@ export default function ThreadFolderPage() {
           </button>
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-amber-200/75">
-              Branch folder
+              브랜치 폴더
             </p>
-            <h1 className="mt-1 text-2xl font-bold">Folder contents</h1>
+            <h1 className="mt-1 text-2xl font-bold">폴더 스레드</h1>
             <label className="mt-3 flex max-w-2xl items-center gap-3 rounded-2xl border border-white/15 bg-slate-950/30 px-4 py-2.5 text-blue-100 shadow-inner transition focus-within:border-cyan-300/45 focus-within:bg-slate-950/45">
               <Search size={17} className="shrink-0 text-cyan-200/70" />
               <input
@@ -162,8 +162,8 @@ export default function ThreadFolderPage() {
         ) : !token ? (
           <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
             <InlineLoginPrompt
-              title="Sign in to open this folder"
-              message="Login to load the threads stored in this branch folder."
+              title="브랜치 폴더를 열려면 로그인하세요"
+              message="로그인하면 이 브랜치 폴더에 저장된 스레드를 확인할 수 있습니다."
             />
           </div>
         ) : error ? (
@@ -255,7 +255,7 @@ export default function ThreadFolderPage() {
                     ) : (
                       <div className="mt-1 flex min-w-0 items-center gap-2">
                         <h2 className="min-w-0 truncate text-2xl font-bold text-white">
-                          {root.title || "Untitled thread"}
+                          {root.title || "제목 없는 스레드"}
                         </h2>
                         {root.can_manage && (
                           <button
@@ -278,7 +278,7 @@ export default function ThreadFolderPage() {
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-2 rounded-full border border-amber-200/20 bg-amber-200/10 px-4 py-2 text-sm font-semibold text-amber-50">
                     <GitBranch size={16} />
-                    {nodes.length} threads
+                    스레드 {nodes.length}개
                   </div>
                   {root.can_manage && (
                     <button
@@ -299,7 +299,7 @@ export default function ThreadFolderPage() {
               <div className="mb-4 flex shrink-0 items-center justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-200/70">
-                    Stored threads
+                    저장된 스레드
                   </p>
                   <h2 className="mt-1 text-xl font-bold">이 폴더의 스레드</h2>
                 </div>
@@ -335,7 +335,7 @@ export default function ThreadFolderPage() {
                         </div>
                         <div className="min-w-0 flex-1">
                           <h3 className="line-clamp-2 text-sm font-semibold leading-5 text-white">
-                            {node.title || "Untitled thread"}
+                            {node.title || "제목 없는 스레드"}
                           </h3>
                           <p className="mt-2 truncate text-[10px] text-white/45">
                             {node.created_at
@@ -351,13 +351,13 @@ export default function ThreadFolderPage() {
                           onClick={() => router.push(`/threads/${node.id}`)}
                           className="flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-white/85 transition hover:border-cyan-300/30 hover:bg-cyan-300/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-white/10 disabled:hover:bg-white/5"
                         >
-                          {node.is_deleted ? "삭제된 스레드" : "Open thread"}
+                          {node.is_deleted ? "삭제된 스레드" : "스레드 열기"}
                         </button>
                         {node.can_manage && !node.is_deleted && (
                           <button
                             type="button"
                             onClick={() => setDeleteTarget(node)}
-                            aria-label={`${node.title || "Untitled thread"} 삭제`}
+                            aria-label={`${node.title || "제목 없는 스레드"} 삭제`}
                             className="flex w-9 items-center justify-center rounded-xl border border-rose-300/15 bg-rose-300/5 text-rose-200/70 transition hover:bg-rose-300/10 hover:text-rose-100"
                           >
                             <Trash2 size={14} />

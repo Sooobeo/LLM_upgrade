@@ -62,7 +62,7 @@ export function BranchFolderList({
     <section className="mb-7 space-y-3">
       <div className="flex items-center gap-2">
         <Folder size={18} className="text-amber-300" />
-        <h2 className="text-lg font-semibold text-white/90">Branch folders</h2>
+        <h2 className="text-lg font-semibold text-white/90">브랜치 폴더</h2>
         <span className="rounded-full bg-amber-300/15 px-2 py-0.5 text-xs font-semibold text-amber-100">
           {roots.length}
         </span>
@@ -113,7 +113,7 @@ export function BranchFolderList({
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-amber-200/70">
-                    Branch folder
+                    브랜치 폴더
                   </p>
                   {editingRootId === root.id ? (
                     <div className="mt-1">
@@ -171,7 +171,7 @@ export function BranchFolderList({
                   ) : (
                     <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
                       <h3 className="min-w-0 flex-1 truncate text-base font-bold text-white">
-                        {root.title || "Untitled thread"}
+                        {root.title || "제목 없는 스레드"}
                       </h3>
                       {root.can_manage && onRename && (
                         <button
@@ -191,9 +191,9 @@ export function BranchFolderList({
                   )}
                   <div className="mt-2 flex items-center gap-2 text-xs text-amber-50/70">
                     <GitBranch size={13} />
-                    <span>{nodes.length} threads</span>
+                    <span>스레드 {nodes.length}개</span>
                     <span>·</span>
-                    <span>root included</span>
+                    <span>루트 포함</span>
                   </div>
                 </div>
               </div>
@@ -205,7 +205,7 @@ export function BranchFolderList({
                   className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-amber-200/25 bg-amber-200/15 px-4 py-2 text-sm font-bold text-amber-50 transition hover:bg-amber-200/25"
                 >
                   <FolderOpen size={16} />
-                  Open
+                  열기
                 </button>
                 {root.can_manage && onDelete && (
                   <button

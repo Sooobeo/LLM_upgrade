@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Trash2 } from "lucide-react";
+import { ArrowLeft, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -71,30 +71,37 @@ export default function BranchZipPage() {
           <button
             type="button"
             onClick={() => router.push("/threads")}
-            aria-label="Move to threads"
-            title="Move to threads"
+            aria-label="스레드 목록으로 돌아가기"
+            title="스레드 목록으로 돌아가기"
             className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/20 bg-white/5 text-xl font-semibold text-white transition hover:bg-white/10"
           >
-            ←
+            <ArrowLeft size={19} />
           </button>
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-cyan-200">
-              Branch visualization
+              브랜치 시각화
             </p>
             <h1 className="mt-1 text-2xl font-bold text-white">branch-zip</h1>
             <p className="mt-1 text-sm text-blue-100">
-              Gemini conversations and their branches, from left to right.
+              Gemini 스레드가 분기된 흐름을 왼쪽에서 오른쪽으로 확인하세요.
             </p>
           </div>
         </header>
 
         <div className="grid min-h-0 flex-1 md:grid-cols-[300px_minmax(0,1fr)]">
-          <aside className="border-b border-white/10 bg-slate-950/25 p-4 md:border-b-0 md:border-r">
-            <h2 className="px-2 text-xs font-semibold uppercase tracking-[0.2em] text-blue-200">
-              Root threads
-            </h2>
+          <aside className="flex min-h-0 flex-col border-b border-white/10 bg-slate-950/25 p-4 md:border-b-0 md:border-r">
+            <div className="flex items-center justify-between px-2">
+              <h2 className="text-xs font-semibold tracking-[0.16em] text-blue-200">
+                루트 스레드
+              </h2>
+              {!authLoading && token && (
+                <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2 py-0.5 text-[10px] font-semibold text-cyan-100">
+                  {roots.length}개
+                </span>
+              )}
+            </div>
 
-            <div className="mt-4 space-y-2">
+            <div className="mt-4 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 [scrollbar-color:rgba(103,232,249,0.35)_rgba(15,23,42,0.35)] [scrollbar-width:thin]">
               {authLoading || isLoading ? (
                 Array.from({ length: 3 }).map((_, index) => (
                   <div
@@ -104,30 +111,30 @@ export default function BranchZipPage() {
                 ))
               ) : !token ? (
                 <div className="rounded-xl border border-amber-300/25 bg-amber-400/10 p-4 text-sm text-amber-100">
-                  <p>Sign in to view branch trees.</p>
+                  <p>로그인 후 브랜치 트리를 확인할 수 있습니다.</p>
                   <button
                     type="button"
                     onClick={() => router.push("/login")}
                     className="mt-3 font-semibold underline underline-offset-4"
                   >
-                    Go to login
+                    로그인하기
                   </button>
                 </div>
               ) : error ? (
                 <div className="rounded-xl border border-red-300/25 bg-red-400/10 p-4 text-sm text-red-100">
-                  <p>{(error as Error).message || "Could not load branch trees."}</p>
+                  <p>{(error as Error).message || "브랜치 트리를 불러오지 못했습니다."}</p>
                   <button
                     type="button"
                     onClick={() => void refetch()}
                     className="mt-3 font-semibold underline underline-offset-4"
                   >
-                    Try again
+                    다시 시도
                   </button>
                 </div>
               ) : roots.length === 0 ? (
                 <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm leading-6 text-blue-100">
-                  No Gemini branch trees yet. Open a Gemini thread and create its
-                  first branch.
+                  아직 생성된 Gemini 브랜치가 없습니다. Gemini 스레드에서
+                  브랜치를 만들어 보세요.
                 </div>
               ) : (
                 roots.map((root) => {
@@ -149,7 +156,7 @@ export default function BranchZipPage() {
                         }`}
                       >
                         <span className="min-w-0 flex-1 truncate">
-                          {root.title || "Untitled thread"}
+                          {root.title || "제목 없는 스레드"}
                         </span>
                         <span
                           aria-hidden="true"
@@ -162,7 +169,7 @@ export default function BranchZipPage() {
                         <button
                           type="button"
                           onClick={() => setDeleteRoot(root)}
-                          aria-label={`${root.title || "Untitled thread"} 폴더 삭제`}
+                          aria-label={`${root.title || "제목 없는 스레드"} 폴더 삭제`}
                           title="폴더와 전체 브랜치 삭제"
                           className="inline-flex w-10 shrink-0 items-center justify-center rounded-xl border border-rose-300/20 bg-rose-300/5 text-rose-200/70 transition hover:bg-rose-300/10 hover:text-rose-100"
                         >
@@ -193,11 +200,11 @@ export default function BranchZipPage() {
                     <span className="h-0 w-0 border-y-[10px] border-l-[15px] border-y-transparent border-l-cyan-300" />
                   </div>
                   <h2 className="mt-5 text-lg font-semibold text-white">
-                    Select a root thread
+                    루트 스레드를 선택하세요
                   </h2>
                   <p className="mt-2 max-w-sm text-sm leading-6 text-blue-100">
-                    Use the triangle beside a root thread to expand its complete
-                    branch tree.
+                    왼쪽 목록에서 루트 스레드를 누르면 전체 브랜치 트리가
+                    펼쳐집니다.
                   </p>
                 </div>
               </div>

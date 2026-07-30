@@ -27,6 +27,8 @@ const COLUMN_GAP = 92;
 const ROW_GAP = 26;
 const CANVAS_PADDING = 36;
 const COMMENT_RADIUS = 9;
+const COMMENT_EDGE_GAP = 24;
+const COMMENT_CROSS_OFFSET = 18;
 const NODE_TITLE_MAX_CHARS = 14;
 
 type GraphNode = {
@@ -115,6 +117,7 @@ function rectangleConnectionGeometry(
   fromHeight: number,
   toWidth: number,
   toHeight: number,
+  minimumCurve = 72,
 ) {
   const fromCenterX = from.x + fromWidth / 2;
   const toCenterX = to.x + toWidth / 2;
@@ -124,7 +127,10 @@ function rectangleConnectionGeometry(
   const startY = from.y + fromHeight / 2;
   const endY = to.y + toHeight / 2;
   const direction = travelsRight ? 1 : -1;
-  const curve = Math.max(72, Math.abs(endX - startX) * 0.45);
+  const curve = Math.max(
+    minimumCurve,
+    Math.abs(endX - startX) * 0.45,
+  );
 
   return {
     path: `M ${startX} ${startY} C ${startX + direction * curve} ${startY}, ${endX - direction * curve} ${endY}, ${endX} ${endY}`,
@@ -157,6 +163,7 @@ function commentConnectionGeometry(from: Position, to: Position) {
     NODE_HEIGHT,
     COMMENT_RADIUS * 2,
     COMMENT_RADIUS * 2,
+    14,
   );
 }
 
@@ -169,7 +176,7 @@ function errorMessage(error: unknown, fallback: string) {
 }
 
 function nodeTitle(title?: string | null) {
-  const normalized = title || "Untitled thread";
+  const normalized = title || "제목 없는 스레드";
   const characters = Array.from(normalized);
   return characters.length > NODE_TITLE_MAX_CHARS
     ? `${characters.slice(0, NODE_TITLE_MAX_CHARS).join("")}…`
@@ -307,60 +314,64 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
       y: nodePosition.y + NODE_HEIGHT / 2,
     };
     const obstacles = [
-      ...Object.values(positions).map((position) => ({
-        x: position.x + NODE_WIDTH / 2,
-        y: position.y + NODE_HEIGHT / 2,
-      })),
+      ...Object.entries(positions)
+        .filter(([nodeId]) => nodeId !== threadId)
+        .map(([, position]) => ({
+          x: position.x + NODE_WIDTH / 2,
+          y: position.y + NODE_HEIGHT / 2,
+        })),
       ...comments.map((comment) => ({
         x: comment.position_x,
         y: comment.position_y,
       })),
     ];
-    const candidates: Position[] = [];
-    const horizontalStep = Math.max(72, layout.width / 9);
-    const verticalStep = Math.max(64, layout.height / 9);
-
-    for (
-      let x = CANVAS_PADDING + COMMENT_RADIUS;
-      x <= layout.width - CANVAS_PADDING - COMMENT_RADIUS;
-      x += horizontalStep
-    ) {
-      for (
-        let y = CANVAS_PADDING + COMMENT_RADIUS;
-        y <= layout.height - CANVAS_PADDING - COMMENT_RADIUS;
-        y += verticalStep
-      ) {
-        if (Math.abs(y - parentCenter.y) > 44) {
-          candidates.push({ x, y });
-        }
-      }
-    }
+    const rightX =
+      nodePosition.x + NODE_WIDTH + COMMENT_RADIUS + COMMENT_EDGE_GAP;
+    const leftX =
+      nodePosition.x - COMMENT_RADIUS - COMMENT_EDGE_GAP;
+    const topY =
+      nodePosition.y - COMMENT_RADIUS - COMMENT_EDGE_GAP;
+    const bottomY =
+      nodePosition.y + NODE_HEIGHT + COMMENT_RADIUS + COMMENT_EDGE_GAP;
+    const candidates: Position[] = [
+      { x: rightX, y: parentCenter.y + COMMENT_CROSS_OFFSET },
+      { x: rightX, y: parentCenter.y - COMMENT_CROSS_OFFSET },
+      { x: parentCenter.x + COMMENT_CROSS_OFFSET, y: bottomY },
+      { x: parentCenter.x + COMMENT_CROSS_OFFSET, y: topY },
+      { x: leftX, y: parentCenter.y + COMMENT_CROSS_OFFSET },
+      { x: leftX, y: parentCenter.y - COMMENT_CROSS_OFFSET },
+      { x: parentCenter.x - COMMENT_CROSS_OFFSET, y: bottomY },
+      { x: parentCenter.x - COMMENT_CROSS_OFFSET, y: topY },
+    ].map((candidate) => ({
+      x: clamp(
+        candidate.x,
+        COMMENT_RADIUS + 8,
+        layout.width - COMMENT_RADIUS - 8,
+      ),
+      y: clamp(
+        candidate.y,
+        COMMENT_RADIUS + 8,
+        layout.height - COMMENT_RADIUS - 8,
+      ),
+    }));
 
     return candidates.reduce<Position & { score: number }>(
       (best, candidate) => {
-        const nearestObstacle = Math.min(
-          ...obstacles.map((obstacle) =>
-            Math.hypot(candidate.x - obstacle.x, candidate.y - obstacle.y),
-          ),
-        );
-        const parentDistance = Math.hypot(
-          candidate.x - parentCenter.x,
-          candidate.y - parentCenter.y,
-        );
-        const score = nearestObstacle - parentDistance * 0.08;
+        const score =
+          obstacles.length === 0
+            ? 0
+            : Math.min(
+                ...obstacles.map((obstacle) =>
+                  Math.hypot(
+                    candidate.x - obstacle.x,
+                    candidate.y - obstacle.y,
+                  ),
+                ),
+              );
         return score > best.score ? { ...candidate, score } : best;
       },
       {
-        x: clamp(
-          parentCenter.x + 90,
-          COMMENT_RADIUS + 8,
-          layout.width - COMMENT_RADIUS - 8,
-        ),
-        y: clamp(
-          parentCenter.y + 90,
-          COMMENT_RADIUS + 8,
-          layout.height - COMMENT_RADIUS - 8,
-        ),
+        ...candidates[0],
         score: Number.NEGATIVE_INFINITY,
       },
     );
@@ -606,7 +617,7 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
       ref={viewportRef}
       className="relative h-[calc(100vh-15rem)] min-h-[520px] w-full select-none overflow-hidden rounded-2xl border border-cyan-300/15 bg-slate-950/45 shadow-inner shadow-cyan-950/30"
       role="tree"
-      aria-label={`${root.title || "Untitled thread"} branch network`}
+      aria-label={`${root.title || "제목 없는 스레드"} 브랜치 트리`}
     >
       <div className="absolute right-3 top-3 z-30 flex items-center gap-1 rounded-xl border border-white/10 bg-slate-950/85 p-1.5 text-xs font-semibold text-white shadow-lg backdrop-blur">
         <button
@@ -645,7 +656,6 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
       <div className="pointer-events-none absolute bottom-3 left-3 z-30 rounded-full border border-white/10 bg-slate-950/75 px-3 py-1.5 text-[10px] font-medium text-cyan-100/80 backdrop-blur">
         {layout.edges.length}개 브랜치 · {comments.length}개 코멘트
         {commentsLoading ? " · 불러오는 중" : ""}
-        {" · "}스레드 배치는 DB 관계에 영향 없음
       </div>
 
       {commentError && (
@@ -811,8 +821,8 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
                 style={{ touchAction: "none" }}
                 title={
                   node.is_deleted
-                    ? `${node.title || "Untitled thread"} · 삭제된 중간 노드`
-                    : `${node.title || "Untitled thread"} · drag to move`
+                    ? `${node.title || "제목 없는 스레드"} · 삭제된 중간 노드`
+                    : `${node.title || "제목 없는 스레드"} · 드래그해서 이동`
                 }
               >
                 <span
@@ -828,17 +838,17 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
                   </span>
                   <span className="mt-0.5 block text-[8px] font-semibold uppercase tracking-[0.14em] text-white/45">
                     {node.is_deleted
-                      ? "Deleted branch"
+                      ? "삭제된 브랜치"
                       : isRoot
-                        ? "Root node"
-                        : `Branch · level ${depth}`}
+                        ? "루트 노드"
+                        : `브랜치 · ${depth}단계`}
                   </span>
                 </span>
               </button>
               {!node.is_deleted && (
                 <button
                   type="button"
-                  aria-label={`${node.title || "Untitled thread"}에 코멘트 추가`}
+                  aria-label={`${node.title || "제목 없는 스레드"}에 코멘트 추가`}
                   title="코멘트 추가"
                   onPointerDown={(event) => event.stopPropagation()}
                   onClick={(event) => {
@@ -855,7 +865,7 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
               {node.can_manage && !node.is_deleted && onDelete && (
                 <button
                   type="button"
-                  aria-label={`${node.title || "Untitled thread"} 삭제`}
+                  aria-label={`${node.title || "제목 없는 스레드"} 삭제`}
                   title={isRoot ? "폴더와 전체 브랜치 삭제" : "브랜치 스레드 삭제"}
                   onPointerDown={(event) => event.stopPropagation()}
                   onClick={(event) => {
@@ -946,7 +956,7 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
                 <span className="w-8" aria-hidden="true" />
               )}
               <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-amber-200/70">
-                Comment
+                코멘트
               </span>
               <button
                 type="button"
@@ -1033,7 +1043,7 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
               노드 코멘트 작성
             </h2>
             <p className="mt-1 text-xs text-amber-100/65">
-              코멘트는 이 스레드 노드와 연결되어 DB에 저장됩니다.
+              작성한 코멘트는 이 스레드 노드에 연결되어 저장됩니다.
             </p>
             <textarea
               value={createText}
