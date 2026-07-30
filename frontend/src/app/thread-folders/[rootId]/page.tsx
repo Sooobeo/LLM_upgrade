@@ -39,6 +39,9 @@ export default function ThreadFolderPage() {
   const [folderBusy, setFolderBusy] = useState(false);
   const [folderError, setFolderError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BranchNode | null>(null);
+  const [deleteSuccessOpen, setDeleteSuccessOpen] = useState(false);
+  const [returnToThreadsAfterDelete, setReturnToThreadsAfterDelete] =
+    useState(false);
 
   useEffect(() => {
     let active = true;
@@ -115,10 +118,12 @@ export default function ThreadFolderPage() {
       queryClient.invalidateQueries({ queryKey: ["thread-branches"] }),
     ]);
     if (node.id === rootId) {
-      router.push("/threads");
+      setReturnToThreadsAfterDelete(true);
+      setDeleteSuccessOpen(true);
       return;
     }
     await refetch();
+    setDeleteSuccessOpen(true);
   };
 
   return (
@@ -387,6 +392,30 @@ export default function ThreadFolderPage() {
           setDeleteTarget(null);
         }}
       />
+
+      {deleteSuccessOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 px-6 backdrop-blur-sm">
+          <div
+            role="status"
+            aria-live="polite"
+            className="w-full max-w-sm rounded-2xl border border-emerald-300/30 bg-slate-950/95 p-6 text-white shadow-2xl"
+          >
+            <p className="text-center text-base font-semibold">삭제되었습니다.</p>
+            <div className="mt-5 flex justify-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteSuccessOpen(false);
+                  if (returnToThreadsAfterDelete) router.push("/threads");
+                }}
+                className="rounded-lg bg-emerald-500 px-5 py-2 text-sm font-semibold text-white transition hover:bg-emerald-400"
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

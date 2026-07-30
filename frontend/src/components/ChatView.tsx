@@ -97,10 +97,7 @@ export function ChatView() {
           if (!active) return;
           const next = session?.access_token || null;
           if (next) {
-            auth.setSession({
-              accessToken: next,
-              refreshToken: session?.refresh_token || undefined,
-            });
+            auth.setToken(next);
           }
           setToken(next);
           const email = session?.user?.email || '';
@@ -187,15 +184,6 @@ export function ChatView() {
     setCommentNotice(
       'Comments are saved locally in this build (backend comments API is not wired).',
     );
-    if (process.env.NODE_ENV !== 'production') {
-      console.warn(
-        '[comments] Saved locally; backend comments API is not connected.',
-        {
-          threadId,
-          targetId,
-        },
-      );
-    }
   };
 
   const deleteComment = (targetId: string, commentIndex: number) => {
@@ -478,9 +466,6 @@ export function ChatView() {
       const reason =
         err?.bodySnippet || err?.message || 'Failed to update bookmark.';
       setBookmarkNotice(`Bookmark update failed: ${reason}`);
-      if (process.env.NODE_ENV !== 'production') {
-        console.warn('[bookmark] toggle failed', { threadId, reason });
-      }
     },
     onSettled: () => {
       queryClient.invalidateQueries({
@@ -492,10 +477,6 @@ export function ChatView() {
   const handleSend = () => {
     if (!composer.trim()) return;
     const content = composer.trim();
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('sending content', content, 'threadId', threadId);
-    }
-
     const userMsg: ChatMessage = {
       role: 'user',
       content,
@@ -627,29 +608,6 @@ export function ChatView() {
     const timer = setTimeout(() => setBookmarkNotice(null), 3500);
     return () => clearTimeout(timer);
   }, [bookmarkNotice]);
-
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'production') return;
-    messages.forEach((m, idx) => {
-      const commentTargetId = resolveCommentTargetId(m, idx);
-      const isMessageBlock = typeof m?.content === 'string';
-      const hasCommentTarget = !!commentTargetId;
-      const showComment = isThreadScreen && isMessageBlock && hasCommentTarget;
-      console.debug(
-        showComment ? '[comments] renderable' : '[comments] blocked',
-        {
-          idx,
-          threadId,
-          role: m.role,
-          isThreadScreen,
-          isMessageBlock,
-          hasCommentTarget,
-          commentTargetId,
-          isWorkspace,
-        },
-      );
-    });
-  }, [messages, threadId, isThreadScreen, isWorkspace]);
 
   if (!isValidThreadId) {
     return (

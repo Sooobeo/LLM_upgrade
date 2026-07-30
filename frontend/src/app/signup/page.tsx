@@ -27,6 +27,7 @@ export default function SignupPage() {
       const res = await fetch(`${API_BASE_URL}/auth/signup/password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ nickname, email, password }),
       });
 
@@ -43,7 +44,6 @@ export default function SignupPage() {
 
       setOk(true);
     } catch (err: any) {
-      console.error("[signup] error:", err);
       setError(err.message ?? "회원가입 오류");
     } finally {
       setLoading(false);

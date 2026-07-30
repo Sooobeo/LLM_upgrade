@@ -463,11 +463,11 @@ async def _post_llm(
             )
 
         if status >= 400:
-            snippet = text[:200]
             logger.warning(
                 "LLM provider error",
-                extra={"provider": provider, "url": url, "status": status, "body_snippet": snippet},
+                extra={"provider": provider, "url": url, "status": status},
             )
+            snippet = text[:200]
             msg = f"status={status}"
             code = "LLM_FAILED"
             if status == 404:

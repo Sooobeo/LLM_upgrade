@@ -22,17 +22,6 @@ export function useCurrentUser(options: Options = {}) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const token =
-      typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-
-    if (!token) {
-      setLoading(false);
-      if (redirectIfMissing) {
-        router.push("/");
-      }
-      return;
-    }
-
     let cancelled = false;
     async function load() {
       try {

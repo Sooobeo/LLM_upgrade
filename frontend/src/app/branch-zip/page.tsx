@@ -1,18 +1,27 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { BranchTree } from "@/components/BranchTree";
 import { getSupabaseToken } from "@/lib/apiFetch";
-import { BranchNode, listThreadBranches } from "@/lib/threadApi";
+import {
+  BranchNode,
+  deleteThread,
+  listThreadBranches,
+} from "@/lib/threadApi";
+import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
 
 export default function BranchZipPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [token, setToken] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [expandedRootId, setExpandedRootId] = useState<string | null>(null);
+  const [deleteRoot, setDeleteRoot] = useState<BranchNode | null>(null);
+  const [deleteSuccessOpen, setDeleteSuccessOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -40,6 +49,20 @@ export default function BranchZipPage() {
   const roots = data?.roots ?? [];
   const expandedRoot =
     roots.find((root) => root.id === expandedRootId) ?? null;
+
+  const removeNode = async (node: BranchNode) => {
+    if (!token) return;
+    await deleteThread(node.id, token);
+    if (node.id === expandedRootId || node.id === expandedRoot?.id) {
+      setExpandedRootId(null);
+    }
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["thread-branches"] }),
+      queryClient.invalidateQueries({ queryKey: ["threads"] }),
+    ]);
+    await refetch();
+    setDeleteSuccessOpen(true);
+  };
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#0c1424] via-[#0d1b33] to-[#0a1022] p-4 text-white md:p-8">
@@ -110,31 +133,43 @@ export default function BranchZipPage() {
                 roots.map((root) => {
                   const isExpanded = expandedRootId === root.id;
                   return (
-                    <button
-                      key={root.id}
-                      type="button"
-                      aria-expanded={isExpanded}
-                      onClick={() =>
-                        setExpandedRootId((current) =>
-                          current === root.id ? null : root.id,
-                        )
-                      }
-                      className={`flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm font-semibold transition ${
-                        isExpanded
-                          ? "border-cyan-300/50 bg-cyan-400/15 text-white shadow-lg shadow-cyan-950/20"
-                          : "border-white/10 bg-white/5 text-blue-50 hover:border-white/20 hover:bg-white/10"
-                      }`}
-                    >
-                      <span className="min-w-0 flex-1 truncate">
-                        {root.title || "Untitled thread"}
-                      </span>
-                      <span
-                        aria-hidden="true"
-                        className={`h-0 w-0 shrink-0 border-y-[6px] border-l-[9px] border-y-transparent border-l-cyan-300 transition-transform ${
-                          isExpanded ? "rotate-90" : ""
+                    <div key={root.id} className="flex items-stretch gap-1.5">
+                      <button
+                        type="button"
+                        aria-expanded={isExpanded}
+                        onClick={() =>
+                          setExpandedRootId((current) =>
+                            current === root.id ? null : root.id,
+                          )
+                        }
+                        className={`flex min-w-0 flex-1 items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm font-semibold transition ${
+                          isExpanded
+                            ? "border-cyan-300/50 bg-cyan-400/15 text-white shadow-lg shadow-cyan-950/20"
+                            : "border-white/10 bg-white/5 text-blue-50 hover:border-white/20 hover:bg-white/10"
                         }`}
-                      />
-                    </button>
+                      >
+                        <span className="min-w-0 flex-1 truncate">
+                          {root.title || "Untitled thread"}
+                        </span>
+                        <span
+                          aria-hidden="true"
+                          className={`h-0 w-0 shrink-0 border-y-[6px] border-l-[9px] border-y-transparent border-l-cyan-300 transition-transform ${
+                            isExpanded ? "rotate-90" : ""
+                          }`}
+                        />
+                      </button>
+                      {root.can_manage && (
+                        <button
+                          type="button"
+                          onClick={() => setDeleteRoot(root)}
+                          aria-label={`${root.title || "Untitled thread"} 폴더 삭제`}
+                          title="폴더와 전체 브랜치 삭제"
+                          className="inline-flex w-10 shrink-0 items-center justify-center rounded-xl border border-rose-300/20 bg-rose-300/5 text-rose-200/70 transition hover:bg-rose-300/10 hover:text-rose-100"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
+                    </div>
                   );
                 })
               )}
@@ -148,6 +183,7 @@ export default function BranchZipPage() {
                   root={expandedRoot}
                   token={token!}
                   onSelect={(threadId) => router.push(`/threads/${threadId}`)}
+                  onDelete={removeNode}
                 />
               </div>
             ) : (
@@ -169,6 +205,38 @@ export default function BranchZipPage() {
           </section>
         </div>
       </section>
+
+      <DeleteConfirmModal
+        isOpen={Boolean(deleteRoot)}
+        title="브랜치 폴더 전체를 삭제하시겠습니까?"
+        description="루트 스레드와 연결된 전체 브랜치가 함께 삭제됩니다."
+        onCancel={() => setDeleteRoot(null)}
+        onConfirm={async () => {
+          if (deleteRoot) await removeNode(deleteRoot);
+          setDeleteRoot(null);
+        }}
+      />
+
+      {deleteSuccessOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 px-6 backdrop-blur-sm">
+          <div
+            role="status"
+            aria-live="polite"
+            className="w-full max-w-sm rounded-2xl border border-emerald-300/30 bg-slate-950/95 p-6 text-white shadow-2xl"
+          >
+            <p className="text-center text-base font-semibold">삭제되었습니다.</p>
+            <div className="mt-5 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setDeleteSuccessOpen(false)}
+                className="rounded-lg bg-emerald-500 px-5 py-2 text-sm font-semibold text-white transition hover:bg-emerald-400"
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

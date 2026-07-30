@@ -3,8 +3,8 @@ from typing import Optional
 from pydantic import BaseModel, Field, model_validator
 
 class CommentCreate(BaseModel):
-    message_index: int
-    content: str
+    message_index: int = Field(..., ge=0, lt=2_147_483_647)
+    content: str = Field(..., min_length=1, max_length=4000)
 
 class CommentResponse(BaseModel):
     id: str

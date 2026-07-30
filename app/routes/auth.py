@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 from typing import Any, Dict, Optional
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, Field
 
 from app.core.config import settings
-from app.core.security import clear_refresh_cookie, set_refresh_cookie
+from app.core.security import clear_refresh_cookie, require_trusted_origin, set_refresh_cookie
 from app.db.deps import get_current_user
 from app.repository.auth import (
     current_user_profile,
@@ -30,7 +30,7 @@ from app.schemas.auth import (
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 class GoogleRefreshBody(BaseModel):
-    refresh_token: str
+    refresh_token: str = Field(..., min_length=20, max_length=4096)
 
 
 @router.get("/google/login", include_in_schema=False)
@@ -44,13 +44,18 @@ def google_login_route(redirect_to: Optional[str] = None):
     base = settings.SUPABASE_URL.rstrip("/")
     query = {"provider": "google"}
     if redirect_to:
+        parsed = urlsplit(redirect_to)
+        redirect_origin = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+        if parsed.scheme not in {"http", "https"} or redirect_origin not in settings.cors_origins:
+            raise HTTPException(status_code=400, detail="redirect_to is not allowed")
         query["redirect_to"] = redirect_to
     url = f"{base}/auth/v1/authorize?{urlencode(query)}"
     return RedirectResponse(url=url, status_code=302)
 
 
 @router.post("/google/exchange-id-token", response_model=GoogleExchangeResp, status_code=200)
-def google_exchange_id_token_route(body: GoogleExchangeBody, response: Response):
+def google_exchange_id_token_route(body: GoogleExchangeBody, request: Request, response: Response):
+    require_trusted_origin(request)
     resp, refresh_token = exchange_google_id_token(body.id_token)
     set_refresh_cookie(response, refresh_token=refresh_token, remember=False)
     return resp
@@ -63,6 +68,7 @@ def me_route(user: Dict[str, Any] = Depends(get_current_user)):
 
 @router.post("/refresh", response_model=AccessOnlyResp)
 def refresh_route(request: Request, response: Response):
+    require_trusted_origin(request)
     refresh_token = request.cookies.get("refresh_token")
     if not refresh_token:
         raise HTTPException(
@@ -77,18 +83,20 @@ def refresh_route(request: Request, response: Response):
 
 
 @router.post("/google/set-session", response_model=AccessOnlyResp)
-def google_set_session(body: GoogleRefreshBody, response: Response):
+def google_set_session(body: GoogleRefreshBody, request: Request, response: Response):
     """
     Set refresh cookie from Supabase-provided refresh_token (after hosted OAuth redirect).
     Frontend should send refresh_token parsed from the Supabase redirect hash.
     """
+    require_trusted_origin(request)
     resp, new_refresh = refresh_with_cookie(body.refresh_token)
     set_refresh_cookie(response, new_refresh or body.refresh_token, remember=False)
     return resp
 
 
 @router.post("/logout")
-def logout_route(response: Response, authorization: Optional[str] = Header(None)):
+def logout_route(request: Request, response: Response, authorization: Optional[str] = Header(None)):
+    require_trusted_origin(request)
     access_token = None
     if authorization and authorization.lower().startswith("bearer "):
         access_token = authorization.split(" ", 1)[1]
@@ -98,16 +106,17 @@ def logout_route(response: Response, authorization: Optional[str] = Header(None)
 
 
 class PasswordLoginRequest(BaseModel):
-    email: str
-    password: str
+    email: EmailStr
+    password: str = Field(..., min_length=8, max_length=128)
 
 
-@router.post("/login/password")
-async def login_with_password(payload: PasswordLoginRequest):
+@router.post("/login/password", response_model=AccessOnlyResp)
+async def login_with_password(payload: PasswordLoginRequest, request: Request, response: Response):
     """
     Login with email/password using Supabase Auth password grant.
     """
 
+    require_trusted_origin(request)
     supabase_url = (settings.SUPABASE_URL or "").rstrip("/")
     anon_key = settings.SUPABASE_ANON_KEY
 
@@ -129,23 +138,32 @@ async def login_with_password(payload: PasswordLoginRequest):
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.post(url, headers=headers, json=json_body)
 
-    try:
-        data = resp.json()
-    except Exception:
-        data = {"raw": resp.text}
-
     if resp.status_code >= 400:
-        raise HTTPException(status_code=resp.status_code, detail=data)
+        raise HTTPException(
+            status_code=401,
+            detail={"code": "INVALID_CREDENTIALS", "message": "Email or password is incorrect."},
+        )
 
-    return data
+    data = resp.json()
+    refresh_token = data.get("refresh_token")
+    access_token = data.get("access_token")
+    if not refresh_token or not access_token:
+        raise HTTPException(status_code=502, detail="Authentication provider returned an invalid response.")
+    set_refresh_cookie(response, refresh_token, remember=False)
+    return AccessOnlyResp(
+        access_token=access_token,
+        token_type=data.get("token_type", "bearer"),
+        expires_in=int(data.get("expires_in", 3600)),
+    )
 
 
 @router.post("/signup/password", response_model=SignupPasswordResp)
-def signup_password(body: SignupPasswordReq):
+def signup_password(body: SignupPasswordReq, request: Request):
+    require_trusted_origin(request)
     try:
         data = signup_with_password(body.email, body.password, body.nickname)
         return data
-    except ValueError as ve:
-        raise HTTPException(status_code=400, detail=str(ve))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"signup failed: {e}")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Unable to create account.")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Unable to create account.")

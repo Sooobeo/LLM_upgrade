@@ -52,16 +52,11 @@ class BranchCommentRepositoryTests(unittest.TestCase):
                         "is_workspace": False,
                     }
                 ]
+            if table == "comments":
+                return rows
             return []
 
-        with (
-            patch.object(repository.sb, "rest_select", side_effect=select),
-            patch.object(
-                repository.sb,
-                "rest_select_as_service",
-                return_value=rows,
-            ) as service_select,
-        ):
+        with patch.object(repository.sb, "rest_select", side_effect=select) as jwt_select:
             result = repository.list_branch_comments(
                 "owner-1",
                 ["thread-1", "thread-1"],
@@ -71,7 +66,7 @@ class BranchCommentRepositoryTests(unittest.TestCase):
         self.assertEqual([comment["id"] for comment in result], ["comment-1"])
         query = [
             call.args[1]
-            for call in service_select.call_args_list
+            for call in jwt_select.call_args_list
             if call.args[0] == "comments"
         ][0]
         self.assertIn(

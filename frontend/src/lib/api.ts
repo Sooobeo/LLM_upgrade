@@ -1,4 +1,5 @@
 import { auth } from "./auth";
+import { refreshBackendAccessToken } from "./apiFetch";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_BACKEND_API_BASE_URL ||
@@ -62,21 +63,7 @@ function extractErrorMessage(payload: any, fallback: string) {
 }
 
 async function refreshAccessToken(): Promise<string | null> {
-  try {
-    const res = await fetch(buildUrl("/auth/refresh"), {
-      method: "POST",
-      credentials: "include",
-    });
-    const text = await res.text();
-    const data = text ? JSON.parse(text) : null;
-    if (!res.ok) return null;
-    const accessToken = data?.access_token;
-    if (!accessToken) return null;
-    auth.setSession({ accessToken, refreshToken: data?.refresh_token });
-    return accessToken;
-  } catch {
-    return null;
-  }
+  return refreshBackendAccessToken();
 }
 
 async function apiFetchInternal(

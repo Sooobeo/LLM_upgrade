@@ -1,27 +1,23 @@
-from typing import Optional
 import logging
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.core.config import settings
+from app.core.middleware import RequestGuardMiddleware, SecurityHeadersMiddleware
 from app.routes import auth, comment, health, thread, user, debug
 
+production_docs_enabled = settings.APP_ENV.value != "prod" or settings.ENABLE_PRODUCTION_API_DOCS
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.PROJECT_VERSION,
     description=settings.DESCRIPTION,
+    docs_url="/docs" if production_docs_enabled else None,
+    redoc_url="/redoc" if production_docs_enabled else None,
+    openapi_url="/openapi.json" if production_docs_enabled else None,
 )
-
-# Allow common local origins; regex catches any localhost/127.* with arbitrary port.
-CORS_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:3001",
-    "http://127.0.0.1:3001",
-]
-CORS_ORIGIN_REGEX = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
 
 
 @app.get("/")
@@ -29,20 +25,22 @@ def root():
     return {"ok": True, "service": "thread-api"}
 
 
-# CORS (adjust as needed)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ORIGINS,
-    allow_origin_regex=CORS_ORIGIN_REGEX,
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
 )
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RequestGuardMiddleware)
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.trusted_hosts)
 
 # Lightweight startup confirmation (dev/local only) to verify the loaded module and CORS setup.
 if settings.APP_ENV in ("dev", "local"):
     logging.getLogger(__name__).info(
-        "CORS middleware enabled for origins=%s regex=%s (app.main:app)", CORS_ORIGINS, CORS_ORIGIN_REGEX
+        "CORS middleware enabled for origins=%s (app.main:app)",
+        settings.cors_origins,
     )
     try:
         from app.services.llm_client import describe_llm_config
@@ -63,49 +61,18 @@ app.include_router(health.router)
 app.include_router(thread.router)
 app.include_router(auth.router)
 app.include_router(user.router)
-app.include_router(debug.router)
 app.include_router(comment.router)
 app.include_router(comment.branch_router)
+if settings.APP_ENV.value != "prod":
+    app.include_router(debug.router)
 
-
-# ==============================
-# 1) owner_id-based search (disabled placeholder)
-#    GET /messages
-# ==============================
-@app.get("/messages")
-def get_messages(
-    owner_id: str,
-    q: Optional[str] = None,
-    limit: int = 50,
-    offset: int = 0,
-):
-    """
-    Placeholder: search messages by owner (currently disabled).
-    """
-    raise HTTPException(
-        status_code=501,
-        detail="search_messages_by_owner not implemented (/messages disabled)",
-    )
-
-
-# ==============================
-# 2) Environment check
-#    GET /_env_check
-# ==============================
-@app.get("/_env_check")
-def env_check():
-    """
-    Quick env check for Supabase keys.
-    """
-    url = settings.SUPABASE_URL
-    anon = settings.SUPABASE_ANON_KEY
-    service_role = getattr(settings, "SUPABASE_SERVICE_ROLE_KEY", None)
-
-    return {
-        "url_set": bool(url),
-        "anon_len": len(anon) if anon else 0,
-        "has_service_role": bool(service_role),
-    }
+    @app.get("/_env_check", include_in_schema=False)
+    def env_check():
+        return {
+            "url_set": bool(settings.SUPABASE_URL),
+            "has_anon_key": bool(settings.SUPABASE_ANON_KEY),
+            "has_service_role": bool(settings.SUPABASE_SERVICE_ROLE_KEY),
+        }
 
 
 # ==============================

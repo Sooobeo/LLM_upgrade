@@ -1,6 +1,9 @@
 "use client";
 
 import {
+  Trash2,
+} from "lucide-react";
+import {
   type PointerEvent as ReactPointerEvent,
   useEffect,
   useMemo,
@@ -16,6 +19,7 @@ import {
   listBranchNodeComments,
   updateBranchNodeComment,
 } from "@/lib/threadApi";
+import { DeleteConfirmModal } from "./DeleteConfirmModal";
 
 const NODE_WIDTH = 154;
 const NODE_HEIGHT = 48;
@@ -176,9 +180,10 @@ type Props = {
   root: BranchNode;
   token: string;
   onSelect: (threadId: string) => void;
+  onDelete?: (node: BranchNode) => void | Promise<void>;
 };
 
-export function BranchTree({ root, token, onSelect }: Props) {
+export function BranchTree({ root, token, onSelect, onDelete }: Props) {
   const layout = useMemo(() => makeLayout(root), [root]);
   const threadIds = useMemo(
     () => layout.nodes.map(({ node }) => node.id),
@@ -198,6 +203,7 @@ export function BranchTree({ root, token, onSelect }: Props) {
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<BranchNode | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const nodeDragRef = useRef<{
     id: string;
@@ -846,6 +852,21 @@ export function BranchTree({ root, token, onSelect }: Props) {
                   +
                 </button>
               )}
+              {node.can_manage && !node.is_deleted && onDelete && (
+                <button
+                  type="button"
+                  aria-label={`${node.title || "Untitled thread"} 삭제`}
+                  title={isRoot ? "폴더와 전체 브랜치 삭제" : "브랜치 스레드 삭제"}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setDeleteTarget(node);
+                  }}
+                  className="absolute -left-1.5 -top-1.5 z-30 flex h-5 w-5 items-center justify-center rounded-full border border-rose-200/45 bg-gradient-to-br from-rose-300/85 to-red-500/80 text-rose-950 shadow-md backdrop-blur transition hover:scale-105 hover:from-rose-200 hover:to-red-400 focus:outline-none focus:ring-2 focus:ring-rose-100/70"
+                >
+                  <Trash2 size={10} strokeWidth={2.5} />
+                </button>
+              )}
             </div>
           );
         })}
@@ -1046,6 +1067,25 @@ export function BranchTree({ root, token, onSelect }: Props) {
           </section>
         </div>
       )}
+
+      <DeleteConfirmModal
+        isOpen={Boolean(deleteTarget)}
+        title={
+          deleteTarget?.id === root.id
+            ? "브랜치 폴더 전체를 삭제하시겠습니까?"
+            : "이 브랜치 스레드를 삭제하시겠습니까?"
+        }
+        description={
+          deleteTarget?.id === root.id
+            ? "루트 스레드와 연결된 전체 브랜치가 함께 삭제됩니다."
+            : "하위 브랜치가 있으면 노드가 비활성화되고, 말단 노드면 완전히 삭제됩니다."
+        }
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={async () => {
+          if (deleteTarget) await onDelete?.(deleteTarget);
+          setDeleteTarget(null);
+        }}
+      />
     </div>
   );
 }

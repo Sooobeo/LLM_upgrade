@@ -30,6 +30,7 @@ from app.repository.thread import (
     remember_thread_model,
     remove_thread_bookmark,
     update_thread_title,
+    _can_access_thread,
 )
 from app.schemas.thread import (
     AddMessagesBody,
@@ -88,8 +89,11 @@ def create_thread(
         return {"thread_id": thread_id, "status": "saved"}
     except HTTPException:
         raise
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {exc}")
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "THREAD_CREATE_FAILED", "message": "Failed to create thread"},
+        )
 
 
 @router.get("", response_model=ThreadsListResp)
@@ -398,8 +402,8 @@ def convert_to_workspace(
     for email in payload.emails:
         try:
             uid = get_user_id_by_email(email)
-        except RuntimeError as exc:
-            raise HTTPException(status_code=500, detail=str(exc))
+        except RuntimeError:
+            raise HTTPException(status_code=500, detail="Unable to look up workspace member")
         if not uid:
             not_found.append(email)
             continue
@@ -492,7 +496,7 @@ def get_thread_bookmarks(
         code = "BOOKMARKS_TABLE_MISSING" if status_code == 404 else "BOOKMARKS_QUERY_FAILED"
         raise HTTPException(
             status_code=500,
-            detail={"code": code, "message": exc.response.text if exc.response is not None else str(exc)},
+            detail={"code": code, "message": "Failed to fetch bookmarks"},
         )
     except Exception:
         raise HTTPException(status_code=500, detail={"code": "BOOKMARKS_QUERY_FAILED", "message": "Failed to fetch bookmarks"})
@@ -523,7 +527,7 @@ def create_thread_bookmark(
         code = "BOOKMARKS_TABLE_MISSING" if status_code == 404 else "BOOKMARKS_INSERT_FAILED"
         raise HTTPException(
             status_code=500,
-            detail={"code": code, "message": exc.response.text if exc.response is not None else str(exc)},
+            detail={"code": code, "message": "Failed to save bookmark"},
         )
     except Exception:
         raise HTTPException(status_code=500, detail={"code": "BOOKMARKS_INSERT_FAILED", "message": "Failed to save bookmark"})
@@ -552,7 +556,7 @@ def delete_thread_bookmark(
         code = "BOOKMARKS_TABLE_MISSING" if status_code == 404 else "BOOKMARKS_DELETE_FAILED"
         raise HTTPException(
             status_code=500,
-            detail={"code": code, "message": exc.response.text if exc.response is not None else str(exc)},
+            detail={"code": code, "message": "Failed to delete bookmark"},
         )
     except Exception:
         raise HTTPException(status_code=500, detail={"code": "BOOKMARKS_DELETE_FAILED", "message": "Failed to delete bookmark"})
@@ -568,6 +572,8 @@ async def chat_with_thread(
     owner_id = user.get("id")
     if not owner_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    if not _can_access_thread(owner_id, thread_id, access_token):
+        raise HTTPException(status_code=404, detail="Thread not found")
 
     incoming = (body.content or "").strip()
     if not incoming:
@@ -650,7 +656,7 @@ async def chat_with_thread(
             status_code=502,
             detail={
                 "code": exc.code or "LLM_FAILED",
-                "message": str(exc),
+                "message": "The language model request failed.",
                 "provider": exc.provider,
                 "status": exc.status,
             },

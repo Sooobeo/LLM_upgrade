@@ -29,6 +29,12 @@ class Settings(BaseSettings):
 
     # --- 환경 구분 ---
     APP_ENV: AppEnv = Field(default=AppEnv.local)
+    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
+    TRUSTED_HOSTS: str = "localhost,127.0.0.1,testserver"
+    MAX_REQUEST_BODY_BYTES: int = 1_048_576
+    AUTH_RATE_LIMIT_PER_MINUTE: int = 20
+    LLM_RATE_LIMIT_PER_MINUTE: int = 30
+    ENABLE_PRODUCTION_API_DOCS: bool = False
 
     # --- LLM Upstream ---
     LLM_PRIMARY_BASE_URL: str = "https://llm.ycc.club"
@@ -90,6 +96,14 @@ class Settings(BaseSettings):
     def cookie_samesite(self) -> str:
         # 로컬 포트 다른 정도면 Lax로 충분, 서브도메인/크로스 도메인이면 "none"(https 필수)
         return "lax" if self.APP_ENV in (AppEnv.local, AppEnv.dev) else "none"
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [value.strip().rstrip("/") for value in self.CORS_ORIGINS.split(",") if value.strip()]
+
+    @property
+    def trusted_hosts(self) -> list[str]:
+        return [value.strip() for value in self.TRUSTED_HOSTS.split(",") if value.strip()]
 
     @field_validator("SUPABASE_URL")
     @classmethod

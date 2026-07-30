@@ -1,4 +1,5 @@
 from typing import List
+from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -12,13 +13,13 @@ from app.schemas.comment import (
 from app.repository.comment import (
     BranchCommentForbiddenError,
     BranchCommentNotFoundError,
-    CommentRepository,
     create_branch_comment,
     delete_branch_comment,
     list_branch_comments,
     update_branch_comment,
+    _accessible_thread_ids,
 )
-from app.db.supabase import get_supabase
+from app.db import supabase as sb
 from app.db.deps import get_access_token, get_current_user
 
 router = APIRouter(prefix="/threads", tags=["comments"])
@@ -67,7 +68,7 @@ def add_branch_comment(
             body.position_x,
             body.position_y,
             access_token,
-            author_id=user.get("email") or user.get("id"),
+            author_id=user.get("id"),
         )
         comment["can_edit"] = True
         return comment
@@ -142,17 +143,23 @@ def remove_branch_comment(
 def create_comment(
     thread_id: str,
     body: CommentCreate,
-    supabase=Depends(get_supabase),
     user=Depends(get_current_user),
+    access_token: str = Depends(get_access_token),
 ):
-    repo = CommentRepository(supabase)
-
-    comment = repo.create_comment(
-        thread_id=thread_id,
-        user_id=user["id"],
-        message_index=body.message_index,
-        content=body.content,
+    owner_id = _owner_id(user)
+    if not _accessible_thread_ids(owner_id, [thread_id], access_token):
+        raise HTTPException(status_code=404, detail="Thread not found")
+    inserted = sb.rest_insert(
+        "comments",
+        [{
+            "thread_id": thread_id,
+            "user_id": owner_id,
+            "message_index": body.message_index,
+            "content": body.content.strip(),
+        }],
+        access_token,
     )
+    comment = inserted[0] if isinstance(inserted, list) and inserted else inserted
 
     if not comment:
         raise HTTPException(status_code=400, detail="코멘트 생성 실패")
@@ -164,23 +171,40 @@ def create_comment(
 def get_comments(
     thread_id: str,
     message_index: int,
-    supabase=Depends(get_supabase),
+    user=Depends(get_current_user),
+    access_token: str = Depends(get_access_token),
 ):
-    repo = CommentRepository(supabase)
-
-    return repo.get_comments(thread_id, message_index)
+    owner_id = _owner_id(user)
+    if not _accessible_thread_ids(owner_id, [thread_id], access_token):
+        raise HTTPException(status_code=404, detail="Thread not found")
+    return sb.rest_select(
+        "comments",
+        "&".join([
+            f"thread_id=eq.{quote(thread_id)}",
+            f"message_index=eq.{message_index}",
+            "select=id,thread_id,message_index,user_id,content,created_at",
+            "order=created_at.asc",
+        ]),
+        access_token,
+    )
 
 
 @router.delete("/{thread_id}/comments/{comment_id}")
 def delete_comment(
     thread_id: str,
     comment_id: str,
-    supabase=Depends(get_supabase),
     user=Depends(get_current_user),
+    access_token: str = Depends(get_access_token),
 ):
-    repo = CommentRepository(supabase)
-
-    result = repo.delete_comment(comment_id, user["id"])
+    result = sb.rest_delete(
+        "comments",
+        "&".join([
+            f"id=eq.{quote(comment_id)}",
+            f"thread_id=eq.{quote(thread_id)}",
+            f"user_id=eq.{quote(_owner_id(user))}",
+        ]),
+        access_token,
+    )
 
     if not result:
         raise HTTPException(status_code=404, detail="코멘트를 찾을 수 없음")

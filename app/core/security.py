@@ -1,4 +1,4 @@
-from fastapi import Response
+from fastapi import HTTPException, Request, Response
 
 from app.core.config import settings
 
@@ -23,7 +23,22 @@ def set_refresh_cookie(response: Response, refresh_token: str, remember: bool = 
     )
 
 def clear_refresh_cookie(response: Response):
-    cookie_options = {"key": REFRESH_COOKIE_NAME, "path": "/"}
+    cookie_options = {
+        "key": REFRESH_COOKIE_NAME,
+        "path": "/",
+        "secure": settings.cookie_secure,
+        "samesite": settings.cookie_samesite,
+    }
     if settings.COOKIE_DOMAIN:
         cookie_options["domain"] = settings.COOKIE_DOMAIN
     response.delete_cookie(**cookie_options)
+
+
+def require_trusted_origin(request: Request) -> None:
+    origin = (request.headers.get("origin") or "").rstrip("/")
+    fetch_site = (request.headers.get("sec-fetch-site") or "").lower()
+    if fetch_site == "cross-site" or (origin and origin not in settings.cors_origins):
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "UNTRUSTED_ORIGIN", "message": "Request origin is not allowed."},
+        )

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { getSupabaseToken } from "@/lib/apiFetch";
 
 type Props = {
   threadId: string;
@@ -27,8 +28,6 @@ export function WorkspaceModal({ threadId, onClose, onSuccess }: Props) {
 
   const handleSubmit = async (e?: React.FormEvent<HTMLFormElement> | React.MouseEvent<HTMLButtonElement>) => {
     e?.preventDefault();
-    console.log("[workspace] handleSubmit called");
-    console.log("[workspace] emails:", emails);
 
     if (emails.length === 0) {
       setError("최소 한 명 이상의 이메일을 추가해주세요.");
@@ -40,25 +39,22 @@ export function WorkspaceModal({ threadId, onClose, onSuccess }: Props) {
     setInfo(null);
 
     try {
-      const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-      console.log("[workspace] token:", token);
+      const token = await getSupabaseToken();
       if (!token) {
         setError("로그인이 필요합니다.");
         return;
       }
 
-      console.log("[workspace] about to fetch");
       const res = await fetch(`${API_BASE}/threads/${threadId}/workspace`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
+        credentials: "include",
         body: JSON.stringify({ emails }),
       });
-      console.log("[workspace] after fetch", res.status);
       const data = await res.json().catch(() => null);
-      console.log("[workspace] response body", data);
       if (!res.ok) {
         setError(data?.detail || "워크스페이스 생성 중 오류가 발생했습니다.");
         return;
@@ -74,7 +70,6 @@ export function WorkspaceModal({ threadId, onClose, onSuccess }: Props) {
       }, 800);
 
     } catch (err: any) {
-      console.error("[workspace] fetch error", err);
       setError(err?.message || "네트워크 오류가 발생했습니다.");
     } finally {
       setSubmitting(false);

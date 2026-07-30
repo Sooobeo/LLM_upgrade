@@ -284,19 +284,14 @@ class ThreadBranchRepositoryTests(unittest.IsolatedAsyncioTestCase):
             if table == "thread_members":
                 return []
             if table == "threads":
-                return [{"id": row["id"]} for row in thread_rows]
+                return thread_rows
+            if table == "messages":
+                return marker_rows
             return []
-
-        def service_select(table, query):
-            return thread_rows if table == "threads" else marker_rows
 
         with (
             patch.object(repository.sb, "rest_select", side_effect=select),
-            patch.object(
-                repository.sb,
-                "rest_select_as_service",
-                side_effect=service_select,
-            ),
+            patch.object(repository, "_ensure_tutorial_branch"),
         ):
             roots = repository.list_branch_trees("owner-1", "token")
 

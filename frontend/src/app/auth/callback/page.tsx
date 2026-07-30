@@ -25,6 +25,7 @@ export default function AuthCallbackPage() {
     const searchParams = parseParams(window.location.search || "");
     const allParams = { ...searchParams, ...hashParams };
     const refreshToken = allParams["refresh_token"];
+    window.history.replaceState(null, "", window.location.pathname);
 
     if (!refreshToken) {
       setMessage("로그인 정보가 없습니다. 다시 로그인해주세요.");
@@ -46,11 +47,9 @@ export default function AuthCallbackPage() {
         }
         // 백엔드가 돌려준 access_token을 로컬에도 저장해 threads 페이지의 토큰 검증을 통과시킴
         const accessToken = data?.access_token;
-        const refreshFromResp = data?.refresh_token ?? refreshToken;
         if (accessToken) {
-          // lazy import to avoid ssr issues
           const { auth } = await import("@/lib/auth");
-          auth.setSession({ accessToken, refreshToken: refreshFromResp });
+          auth.setToken(accessToken);
         }
         setMessage("로그인 완료! 스레드로 이동합니다...");
         setTimeout(() => router.replace("/threads"), 400);

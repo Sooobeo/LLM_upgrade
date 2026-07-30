@@ -1,5 +1,4 @@
 import { auth } from "./auth";
-import { supabase } from "./supabaseClient";
 
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ||
@@ -14,31 +13,44 @@ export type FetchDebug = {
   bodySnippet?: string;
 };
 
+let refreshPromise: Promise<string | null> | null = null;
+
 function buildUrl(path: string) {
   if (path.startsWith("http://") || path.startsWith("https://")) return path;
   if (!path.startsWith("/")) return `${API_BASE_URL}/${path}`;
   return `${API_BASE_URL}${path}`;
 }
 
-export async function getSupabaseToken(): Promise<string | null> {
-  if (supabase) {
-    const { data, error } = await supabase.auth.getSession();
-    if (error) {
-      auth.clear();
+export async function refreshBackendAccessToken(): Promise<string | null> {
+  if (refreshPromise) return refreshPromise;
+  const request = (async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!response.ok) {
+        auth.clear();
+        return null;
+      }
+      const data = await response.json();
+      const token = data?.access_token || null;
+      if (token) auth.setToken(token);
+      return token;
+    } catch {
       return null;
     }
-    const token = data.session?.access_token || null;
-    if (token) {
-      auth.setSession({
-        accessToken: token,
-        refreshToken: data.session?.refresh_token || undefined,
-      });
-      return token;
-    }
-    auth.clear();
-    return null;
+  })();
+  refreshPromise = request;
+  try {
+    return await request;
+  } finally {
+    if (refreshPromise === request) refreshPromise = null;
   }
-  return auth.getToken();
+}
+
+export async function getSupabaseToken(): Promise<string | null> {
+  return auth.getToken() || refreshBackendAccessToken();
 }
 
 export async function apiFetch(
@@ -75,6 +87,7 @@ export async function apiFetch(
       method,
       headers,
       body,
+      credentials: "include",
     });
   } catch (cause) {
     const err: any = new Error(

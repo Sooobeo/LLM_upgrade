@@ -5,11 +5,11 @@ AllowedRole = Literal["user", "assistant", "system", "tool"]
 
 class MessageIn(BaseModel):
     role: AllowedRole
-    content: str = Field(..., min_length=1)
+    content: str = Field(..., min_length=1, max_length=32_000)
 
 class ThreadCreate(BaseModel):
-    title: str = Field(..., min_length=1)
-    messages: List[MessageIn] = Field(default_factory=list)
+    title: str = Field(..., min_length=1, max_length=200)
+    messages: List[MessageIn] = Field(default_factory=list, max_length=100)
 
 class ThreadCreateResp(BaseModel):
     thread_id: str
@@ -59,7 +59,7 @@ class MessagesResp(BaseModel):
     messages: List[MessageRow]
 
 class AddMessagesBody(BaseModel):
-    messages: List[MessageIn] = Field(..., min_length=1)
+    messages: List[MessageIn] = Field(..., min_length=1, max_length=100)
 
 class AddMessagesResp(BaseModel):
     thread_id: str
@@ -73,8 +73,8 @@ class ChatBody(BaseModel):
     - model: (선택) 기본 모델(settings.LLM_MODEL) 대신 특정 모델로 호출
     - context_limit: (선택) 최근 N개 메시지를 컨텍스트로 사용
     """
-    content: str = Field(..., min_length=1)
-    model: Optional[str] = None
+    content: str = Field(..., min_length=1, max_length=32_000)
+    model: Optional[str] = Field(default=None, max_length=100)
     context_limit: int = Field(default=50, ge=1, le=200)
 
 
@@ -94,7 +94,7 @@ class ChatResponse(ChatResp):
 
 
 class BranchCreate(BaseModel):
-    model: Optional[str] = None
+    model: Optional[str] = Field(default=None, max_length=100)
 
 
 class BranchCreateResp(BaseModel):
@@ -113,6 +113,7 @@ class BranchNode(BaseModel):
     context_preview: Optional[str] = Field(default=None, max_length=20)
     created_at: str
     is_deleted: bool = False
+    is_tutorial: bool = False
     can_manage: bool = False
     children: List["BranchNode"] = Field(default_factory=list)
 

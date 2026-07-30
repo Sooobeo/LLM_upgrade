@@ -19,7 +19,7 @@ export function AppHeader() {
           className="cursor-pointer text-sm font-semibold tracking-wide text-blue-100"
           onClick={() => router.push("/threads")}
         >
-          LLM Upgrade
+          llm upgrade: chat archiving
         </div>
         <div className="flex items-center gap-3">
           {loading ? (

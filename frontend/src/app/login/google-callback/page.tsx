@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { auth } from "@/lib/auth";
+import { API_BASE_URL } from "@/lib/apiFetch";
 
 function parseTokens() {
   if (typeof window === "undefined") return {} as Record<string, string>;
@@ -31,16 +32,27 @@ export default function GoogleCallbackPage() {
       return;
     }
 
-    const accessToken = params.access_token;
     const refreshToken = params.refresh_token;
 
-    if (!accessToken) {
+    if (!refreshToken) {
       setMessage("토큰을 받지 못했습니다. 다시 시도해주세요.");
       return;
     }
 
-    auth.setSession({ accessToken, refreshToken });
-    window.location.replace("/threads");
+    window.history.replaceState(null, "", window.location.pathname);
+    fetch(`${API_BASE_URL}/auth/google/set-session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    })
+      .then(async (response) => {
+        const data = await response.json().catch(() => null);
+        if (!response.ok || !data?.access_token) throw new Error("session");
+        auth.setToken(data.access_token);
+        window.location.replace("/threads");
+      })
+      .catch(() => setMessage("로그인 세션을 만들 수 없습니다. 다시 로그인해 주세요."));
   }, []);
 
   return (

@@ -10,25 +10,19 @@ from app.schemas.auth import AccessOnlyResp, GoogleExchangeResp, MeResp
 
 
 def exchange_google_id_token(id_token: str) -> Tuple[GoogleExchangeResp, str]:
-    """Supabase로 Google ID 토큰을 교환하고 refresh_token을 함께 반환합니다."""
     try:
         data = sb.exchange_google_id_token(id_token)
         refresh = data.get("refresh_token")
         if not refresh:
             raise HTTPException(
                 status_code=502,
-                detail={"code": "SUPABASE_EXCHANGE_FAILED", "message": "No refresh_token from Supabase"},
+                detail={"code": "SUPABASE_EXCHANGE_FAILED", "message": "No refresh token from Supabase"},
             )
-
-        access_token = data.get("access_token")
-        token_type = data.get("token_type", "bearer")
-        expires_in = int(data.get("expires_in", 3600))
-        user = data.get("user", {}) or {}
-
-        resp = GoogleExchangeResp(
-            access_token=access_token,
-            token_type=token_type,
-            expires_in=expires_in,
+        user = data.get("user") or {}
+        response = GoogleExchangeResp(
+            access_token=data.get("access_token"),
+            token_type=data.get("token_type", "bearer"),
+            expires_in=int(data.get("expires_in", 3600)),
             user={
                 "id": user.get("id"),
                 "email": user.get("email"),
@@ -37,26 +31,25 @@ def exchange_google_id_token(id_token: str) -> Tuple[GoogleExchangeResp, str]:
             },
             issued_at=datetime.now(timezone.utc).isoformat(),
         )
-        return resp, refresh
+        return response, refresh
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         raise HTTPException(
             status_code=502,
-            detail={"code": "SUPABASE_EXCHANGE_FAILED", "message": f"Failed to exchange token with Supabase: {e}"},
+            detail={"code": "SUPABASE_EXCHANGE_FAILED", "message": "Failed to exchange token with Supabase"},
         )
 
 
 def refresh_with_cookie(refresh_token: str) -> Tuple[AccessOnlyResp, Optional[str]]:
-    """Refresh 토큰을 사용해 액세스 토큰을 재발급합니다."""
     try:
         data = sb.refresh_with_token(refresh_token)
-        resp = AccessOnlyResp(
+        response = AccessOnlyResp(
             access_token=data["access_token"],
             token_type=data.get("token_type", "bearer"),
             expires_in=int(data.get("expires_in", 3600)),
         )
-        return resp, data.get("refresh_token")  # 새 토큰 있을 수도, 없을 수도
+        return response, data.get("refresh_token")
     except Exception:
         raise HTTPException(
             status_code=401,
@@ -73,8 +66,7 @@ def current_user_profile(user_json: Dict[str, Any]) -> MeResp:
         "nickname": user_metadata.get("nickname"),
     }
     if identities:
-        prv = identities[0]
-        identity_data = prv.get("identity_data", {})
+        identity_data = identities[0].get("identity_data", {})
         meta["name"] = meta.get("name") or identity_data.get("name")
         meta["avatar_url"] = meta.get("avatar_url") or identity_data.get("avatar_url")
     meta = {key: value for key, value in meta.items() if value is not None}
@@ -95,31 +87,14 @@ def revoke_if_possible(access_token: Optional[str]) -> None:
 
 
 def signup_with_password(email: str, password: str, nickname: str) -> Dict[str, Any]:
-    """Supabase Auth 회원가입 후 닉네임을 Auth user metadata에 저장합니다."""
-    client = sb.get_supabase(service_role=True)
-
-    # 1) Supabase Auth signUp
-    auth_res = client.auth.sign_up(
-        {
-            "email": email,
-            "password": password,
-            "options": {"data": {"nickname": nickname}},
-        }
-    )
-    if auth_res.user is None:
-        raise ValueError("Supabase sign_up failed")
-
-    user = auth_res.user
-    session = auth_res.session  # 이메일 인증 OFF면 session이 올 수도 있음
-    user_id = user.id
-
-    # 2) 응답 구성
-    access_token = session.access_token if session else None
-    token_type = session.token_type if session else None
-
+    data = sb.signup_with_password(email, password, nickname)
+    user = data.get("user") or {}
+    user_id = user.get("id")
+    if not user_id:
+        raise ValueError("Supabase sign-up failed")
     return {
-        "access_token": access_token,
-        "token_type": token_type,
+        "access_token": data.get("access_token"),
+        "token_type": data.get("token_type"),
         "user_id": user_id,
         "email": email,
         "nickname": nickname,

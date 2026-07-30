@@ -6,8 +6,6 @@ from typing import Any, Dict, Iterable, List, Optional
 from urllib.parse import quote
 from uuid import uuid4
 
-from supabase import Client
-
 from app.db import supabase as sb
 
 
@@ -131,7 +129,7 @@ def list_branch_comments(
         return []
 
     safe_ids = ",".join(quote(thread_id) for thread_id in accessible_ids)
-    rows = sb.rest_select_as_service(
+    rows = sb.rest_select(
         "comments",
         "&".join(
             [
@@ -141,6 +139,7 @@ def list_branch_comments(
                 "order=created_at.asc",
             ]
         ),
+        access_token,
     )
     decoded = (_decode_branch_comment(row) for row in rows)
     return [comment for comment in decoded if comment is not None]
@@ -269,40 +268,3 @@ def delete_branch_comment(
         access_token,
     )
     return deleted > 0
-
-class CommentRepository:
-    def __init__(self, supabase: Client):
-        self.supabase = supabase
-
-    def create_comment(self, thread_id: str, user_id: str, message_index: int, content: str):
-        res = self.supabase.table("comments").insert({
-            "thread_id": thread_id,
-            "user_id": user_id,
-            "message_index": message_index,
-            "content": content
-        }).execute()
-
-        return res.data[0] if res.data else None
-
-    def get_comments(self, thread_id: str, message_index: int):
-        res = (
-            self.supabase.table("comments")
-            .select("*")
-            .eq("thread_id", thread_id)
-            .eq("message_index", message_index)
-            .order("created_at", desc=False)
-            .execute()
-        )
-
-        return res.data
-
-    def delete_comment(self, comment_id: str, user_id: str):
-        res = (
-            self.supabase.table("comments")
-            .delete()
-            .eq("id", comment_id)
-            .eq("user_id", user_id)
-            .execute()
-        )
-
-        return res.data

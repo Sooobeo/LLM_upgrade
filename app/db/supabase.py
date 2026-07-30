@@ -85,6 +85,18 @@ def refresh_with_token(refresh_token: str) -> Dict[str, Any]:
     return r.json()
 
 
+def signup_with_password(email: str, password: str, nickname: str) -> Dict[str, Any]:
+    url = f"{_base_url()}/auth/v1/signup"
+    payload = {
+        "email": email,
+        "password": password,
+        "data": {"nickname": nickname},
+    }
+    r = requests.post(url, headers=_base_headers(), json=payload, timeout=15)
+    r.raise_for_status()
+    return r.json()
+
+
 def get_userinfo(access_token: str) -> Dict[str, Any]:
     url = f"{_base_url()}/auth/v1/user"
     headers = {**_base_headers(), "Authorization": f"Bearer {access_token}"}
@@ -116,29 +128,6 @@ def rest_insert(table: str, rows: List[Dict[str, Any]], access_token: str) -> Di
 def rest_select(table: str, query: str, access_token: str) -> List[Dict[str, Any]]:
     url = f"{_base_url()}/rest/v1/{table}?{query}"
     r = requests.get(url, headers=_auth_headers(access_token), timeout=15)
-    r.raise_for_status()
-    return r.json()
-
-
-def rest_select_as_service(table: str, query: str) -> List[Dict[str, Any]]:
-    """
-    Read rows with the service role after a route/repository has already
-    authorized the caller with their authenticated JWT.
-
-    This is reserved for shared-workspace reads where table RLS correctly
-    protects writes but intentionally hides rows authored by another member.
-    Callers must restrict the query to previously authorized resource IDs.
-    """
-    service_key = _get_env("SUPABASE_SERVICE_ROLE_KEY")
-    if not service_key:
-        raise ConfigError("SUPABASE_SERVICE_ROLE_KEY is not configured.")
-    url = f"{_base_url()}/rest/v1/{table}?{query}"
-    headers = {
-        "apikey": service_key,
-        "Authorization": f"Bearer {service_key}",
-        "Content-Type": "application/json",
-    }
-    r = requests.get(url, headers=headers, timeout=15)
     r.raise_for_status()
     return r.json()
 
@@ -184,7 +173,7 @@ async def get_user_from_access_token(access_token: str) -> Dict[str, Any]:
     토큰이 유효하지 않으면 SupabaseAuthError를 raise.
     """
     base_url = _base_url()
-    api_key: Optional[str] = _get_env("SUPABASE_SERVICE_ROLE_KEY") or _get_env("SUPABASE_ANON_KEY")
+    api_key: Optional[str] = _get_env("SUPABASE_ANON_KEY")
     if not api_key:
         raise SupabaseAuthError("Supabase API 키가 설정되어 있지 않습니다.")
 

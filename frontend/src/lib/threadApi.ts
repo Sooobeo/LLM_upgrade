@@ -63,6 +63,7 @@ export type BranchNode = {
   context_preview?: string;
   created_at?: string;
   is_deleted?: boolean;
+  is_tutorial?: boolean;
   can_manage?: boolean;
   children: BranchNode[];
 };

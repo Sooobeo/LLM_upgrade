@@ -67,26 +67,22 @@ export default function LandingPage() {
       >
         <div className="max-w-4xl text-center space-y-8">
           <span className="inline-flex rounded-full border border-white/20 bg-white/5 px-4 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-blue-200 backdrop-blur">
-            LLM Upgrade
+            Conversation archive
           </span>
 
-          <h1 className="text-5xl font-extrabold leading-tight md:text-6xl">
-            대화 기록을 정리하고
-            <br />
-            <span className="bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">
-              바로 시작하세요
-            </span>
+          <h1 className="bg-gradient-to-r from-blue-300 via-white to-cyan-300 bg-clip-text text-4xl font-extrabold leading-tight text-transparent md:text-6xl">
+            llm upgrade: chat archiving
           </h1>
 
           <p className="mx-auto max-w-2xl text-lg text-blue-100">
-            대화 기록을 한곳에 정리하고 빠르게 이어서 작업하세요.
-            직관적인 워크스페이스와 검색으로 생산성을 높입니다.
+            흩어진 LLM 대화를 스레드로 보관하고, Gemini 브랜치를
+            시각화해 생각의 흐름까지 한곳에 아카이빙하세요.
           </p>
 
           <div className="flex justify-center gap-3 text-sm text-blue-100">
-            <span className="rounded-full border border-white/20 px-3 py-1">빠른 검색</span>
-            <span className="rounded-full border border-white/20 px-3 py-1">보안 인증</span>
-            <span className="rounded-full border border-white/20 px-3 py-1">워크플로 최적화</span>
+            <span className="rounded-full border border-white/20 px-3 py-1">대화 아카이빙</span>
+            <span className="rounded-full border border-white/20 px-3 py-1">브랜치 맵</span>
+            <span className="rounded-full border border-white/20 px-3 py-1">안전한 접근</span>
           </div>
         </div>
 
@@ -121,20 +117,20 @@ export default function LandingPage() {
             {/* Left */}
             <div className="flex flex-col justify-center space-y-6 px-8 py-10 md:px-12 md:py-14">
               <p className="text-sm font-semibold uppercase tracking-[0.25em] text-blue-100">
-                로그인
+                Archive access
               </p>
               <h2 className="text-3xl font-bold md:text-4xl">
-                시작할 준비가 되셨나요?
+                저장한 대화로 돌아오세요
               </h2>
               <p className="text-sm leading-6 text-blue-100">
-                구글 계정 또는 이메일로 안전하게 로그인하고
-                바로 스레드 작업을 시작하세요.
+                로그인하면 보관한 스레드, 브랜치 폴더와 코멘트를
+                안전하게 불러와 바로 이어갈 수 있습니다.
               </p>
 
               <div className="flex flex-wrap gap-3 text-xs text-blue-100">
-                <span className="rounded-full border border-white/20 px-3 py-1">SSO 지원</span>
-                <span className="rounded-full border border-white/20 px-3 py-1">구글 연동</span>
-                <span className="rounded-full border border-white/20 px-3 py-1">데이터 보호</span>
+                <span className="rounded-full border border-white/20 px-3 py-1">스레드 보관</span>
+                <span className="rounded-full border border-white/20 px-3 py-1">Google 로그인</span>
+                <span className="rounded-full border border-white/20 px-3 py-1">계정별 보호</span>
               </div>
             </div>
 
@@ -145,9 +141,9 @@ export default function LandingPage() {
               <div className="flex flex-col gap-6 px-8 py-10 md:px-10 md:py-14">
                 <div>
                   <br/>
-                  <h3 className="text-2xl font-semibold">LLM Upgrade 계정</h3>
+                  <h3 className="text-2xl font-semibold">Chat Archiving 계정</h3>
                   <p className="text-sm text-slate-600">
-                    로그인하거나 새로 시작하세요.
+                    대화 아카이브에 안전하게 접속하세요.
                   </p>
                 </div>
 
@@ -179,14 +175,14 @@ export default function LandingPage() {
                       />
                     </svg>
 
-                    <span>구글 계정으로 계속하기</span>
+                    <span>Google 계정으로 아카이브 열기</span>
                   </button>
 
                   <button
                     onClick={() => router.push("/threads")}
                     className="rounded-xl bg-[#0d1b33] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#0f223e]"
                   >
-                    이메일로 로그인
+                    이메일 계정으로 아카이브 열기
                   </button>
 
                 </div>

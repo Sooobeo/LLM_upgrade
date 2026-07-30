@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getSupabaseToken } from "@/lib/apiFetch";
 
 type Member = {
   user_id: string;
@@ -26,13 +27,14 @@ export function MembersModal({ threadId, onClose }: Props) {
       setError(null);
       setLoading(true);
       try {
-        const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+        const token = await getSupabaseToken();
         if (!token) {
           setError("로그인이 필요합니다.");
           return;
         }
         const res = await fetch(`${API_BASE}/threads/${threadId}/members`, {
           headers: { Authorization: `Bearer ${token}` },
+          credentials: "include",
         });
         const data = await res.json().catch(() => null);
         if (!res.ok) {

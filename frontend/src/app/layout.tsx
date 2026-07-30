@@ -3,8 +3,8 @@ import "./globals.css";
 import { Providers } from "./providers";
 
 export const metadata: Metadata = {
-  title: "LLM Upgrade",
-  description: "Thread-based chat logging workspace",
+  title: "llm upgrade: chat archiving",
+  description: "LLM 대화 스레드와 Gemini 브랜치를 보관하는 아카이브",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

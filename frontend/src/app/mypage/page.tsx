@@ -22,25 +22,12 @@ export default function MyPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const token =
-      typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-
-    if (!token) {
-      if (!userLoading) {
-        router.push("/");
-      }
-      setLoading(false);
-      return;
-    }
-
     async function load() {
       try {
         setLoading(true);
         setError(null);
-        // Explicitly attach the access token so the backend knows who we are.
         const data = await api("/extension-files", {
           method: "GET",
-          headers: { Authorization: `Bearer ${token}` },
         });
         const list: ExtensionFile[] = Array.isArray(data) ? data : data?.items ?? [];
         setFiles(list);

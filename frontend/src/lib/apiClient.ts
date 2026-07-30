@@ -1,5 +1,5 @@
 import { auth } from "./auth";
-import { supabase } from "./supabaseClient";
+import { getSupabaseToken } from "./apiFetch";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ||
@@ -24,16 +24,7 @@ export type DebugInfo = {
 async function getAccessToken(): Promise<string | null> {
   const stored = auth.getToken();
   if (stored) return stored;
-  if (!supabase) return null;
-
-  // Supabase session fallback (auto-refreshes if needed)
-  const sessionRes = await supabase.auth.getSession();
-  const token = sessionRes.data.session?.access_token || null;
-  const refresh = sessionRes.data.session?.refresh_token || null;
-  if (token) {
-    auth.setSession({ accessToken: token, refreshToken: refresh || undefined });
-  }
-  return token;
+  return getSupabaseToken();
 }
 
 function extractErrorMessage(payload: unknown, fallback: string): string {
@@ -77,18 +68,8 @@ function extractErrorMessage(payload: unknown, fallback: string): string {
 }
 
 async function refreshToken(): Promise<string | null> {
-  if (!supabase) return null;
-  try {
-    const res = await supabase.auth.refreshSession();
-    const token = res.data.session?.access_token || null;
-    const refresh = res.data.session?.refresh_token || null;
-    if (token) {
-      auth.setSession({ accessToken: token, refreshToken: refresh || undefined });
-    }
-    return token;
-  } catch {
-    return null;
-  }
+  auth.clear();
+  return getSupabaseToken();
 }
 
 export async function apiClient(
@@ -139,13 +120,6 @@ export async function apiClient(
   }
 
   const snippet = typeof data === "string" ? data.slice(0, 500) : JSON.stringify(data).slice(0, 500);
-  if (process.env.NODE_ENV !== "production") {
-    console.warn("[apiClient]", method, url, "->", response.status, {
-      hasAuth,
-      threadId: meta?.threadId,
-      body: snippet,
-    });
-  }
   debug?.({ url, method, status: response.status, bodySnippet: snippet, hasAuth, threadId: meta?.threadId });
 
   if (!response.ok) {
@@ -167,10 +141,10 @@ export async function apiClient(
 
 export async function pingBackend(debug?: (info: DebugInfo) => void) {
   try {
-    const res = await fetch(buildUrl("/openapi.json"));
+    const res = await fetch(buildUrl("/"));
     const text = await res.text();
     debug?.({
-      url: buildUrl("/openapi.json"),
+      url: buildUrl("/"),
       method: "GET",
       status: res.status,
       bodySnippet: text.slice(0, 200),
@@ -179,7 +153,7 @@ export async function pingBackend(debug?: (info: DebugInfo) => void) {
     return res.ok;
   } catch (e: any) {
     debug?.({
-      url: buildUrl("/openapi.json"),
+      url: buildUrl("/"),
       method: "GET",
       status: undefined,
       bodySnippet: e?.message,

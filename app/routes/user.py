@@ -36,7 +36,6 @@ async def list_extension_files(
 
     try:
         items = list_extension_files_for_user(user_id, access_token)
-    except Exception as exc:
-        # Surface a controlled 500 error rather than letting lower-level exceptions bypass CORS handling.
-        raise HTTPException(status_code=500, detail=f"Failed to load extension files: {exc}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to load extension files")
     return {"items": items}

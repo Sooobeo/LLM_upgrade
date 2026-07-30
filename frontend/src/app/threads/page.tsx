@@ -22,7 +22,7 @@ import {
   updateThreadTitle,
 } from "@/lib/threadApi";
 import { supabase } from "@/lib/supabaseClient";
-import { getSupabaseToken } from "@/lib/apiFetch";
+import { API_BASE_URL, getSupabaseToken } from "@/lib/apiFetch";
 import { WorkspaceModal } from "@/components/WorkspaceModal";
 import { WorkspaceMembersModal } from "@/components/WorkspaceMembersModal";
 
@@ -50,7 +50,7 @@ export default function ThreadsPage() {
       ? supabase.auth.onAuthStateChange((_event, session) => {
           if (!active) return;
           const next = session?.access_token || null;
-          if (next) auth.setSession({ accessToken: next, refreshToken: session?.refresh_token || undefined });
+          if (next) auth.setToken(next);
           setToken(next);
           setAuthLoading(false);
         })
@@ -122,6 +122,16 @@ export default function ThreadsPage() {
   );
 
   const logout = async () => {
+    const currentToken = auth.getToken();
+    try {
+      await fetch(`${API_BASE_URL}/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+        headers: currentToken ? { Authorization: `Bearer ${currentToken}` } : {},
+      });
+    } catch {
+      // Clear local in-memory state even if the server is temporarily unavailable.
+    }
     auth.clear();
     await supabase?.auth.signOut();
     router.push("/login");
@@ -138,13 +148,13 @@ export default function ThreadsPage() {
           <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-blue-200">
-                Threads
+                Chat archive
               </p>
               <h1 className="text-3xl font-bold text-white md:text-4xl">
-                Your conversations
+                Archived conversations
               </h1>
               <p className="text-sm text-blue-100">
-                Manage threads, start a new chat, and jump back into workspaces.
+                저장한 대화와 브랜치 폴더를 찾고, 새로운 흐름을 시작하세요.
               </p>
             </div>
 
