@@ -19,7 +19,9 @@ export default function LandingPage() {
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/threads`,
+        // The callback exchanges Supabase's refresh token for the backend's
+        // HttpOnly session cookie before entering authenticated pages.
+        redirectTo: `${window.location.origin}/auth/callback`,
       },
     });
   };

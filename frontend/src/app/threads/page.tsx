@@ -49,8 +49,12 @@ export default function ThreadsPage() {
     const { data: subscription } = supabase
       ? supabase.auth.onAuthStateChange((_event, session) => {
           if (!active) return;
-          const next = session?.access_token || null;
-          if (next) auth.setToken(next);
+          const next = session?.access_token;
+          // Hosted Google OAuth lives in the backend's HttpOnly refresh
+          // cookie. The non-persistent browser client emits an initial null
+          // session, which must not overwrite the restored backend session.
+          if (!next) return;
+          auth.setToken(next);
           setToken(next);
           setAuthLoading(false);
         })

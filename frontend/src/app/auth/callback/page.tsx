@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { API_BASE_URL } from "@/lib/apiFetch";
 
@@ -18,9 +18,16 @@ function parseParams(input: string): TokenParams {
 
 export default function AuthCallbackPage() {
   const router = useRouter();
+  const callbackStarted = useRef(false);
   const [message, setMessage] = useState("스레드를 불러오는 중입니다...");
 
   useEffect(() => {
+    // React Strict Mode runs effects twice in development. A Supabase refresh
+    // token is rotating/single-use, so submitting it twice makes the second
+    // request fail even though the first request created the session.
+    if (callbackStarted.current) return;
+    callbackStarted.current = true;
+
     const hashParams = parseParams(window.location.hash || "");
     const searchParams = parseParams(window.location.search || "");
     const allParams = { ...searchParams, ...hashParams };

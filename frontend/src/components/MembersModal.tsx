@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getSupabaseToken } from "@/lib/apiFetch";
+import { API_BASE_URL, getSupabaseToken } from "@/lib/apiFetch";
 
 type Member = {
   user_id: string;
@@ -14,8 +14,6 @@ type Props = {
   threadId: string;
   onClose: () => void;
 };
-
-const API_BASE = process.env.NEXT_PUBLIC_BACKEND_API_BASE_URL;
 
 export function MembersModal({ threadId, onClose }: Props) {
   const [members, setMembers] = useState<Member[]>([]);
@@ -32,7 +30,7 @@ export function MembersModal({ threadId, onClose }: Props) {
           setError("로그인이 필요합니다.");
           return;
         }
-        const res = await fetch(`${API_BASE}/threads/${threadId}/members`, {
+        const res = await fetch(`${API_BASE_URL}/threads/${threadId}/members`, {
           headers: { Authorization: `Bearer ${token}` },
           credentials: "include",
         });

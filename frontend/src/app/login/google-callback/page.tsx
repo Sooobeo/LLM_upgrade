@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { auth } from "@/lib/auth";
 import { API_BASE_URL } from "@/lib/apiFetch";
 
@@ -22,9 +22,13 @@ function parseTokens() {
 }
 
 export default function GoogleCallbackPage() {
+  const callbackStarted = useRef(false);
   const [message, setMessage] = useState("구글 로그인 처리 중입니다...");
 
   useEffect(() => {
+    if (callbackStarted.current) return;
+    callbackStarted.current = true;
+
     const params = parseTokens();
     const error = params.error || params.error_description;
     if (error) {

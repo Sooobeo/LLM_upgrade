@@ -67,6 +67,7 @@ export function ChatView() {
   }>({});
 
   const [token, setToken] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
   const [comments, setComments] = useState<Record<string, string[]>>({});
   const [commentAuthor, setCommentAuthor] = useState('me');
@@ -88,18 +89,25 @@ export function ChatView() {
 
   useEffect(() => {
     let active = true;
-    getSupabaseToken().then((t) => {
-      if (active) setToken(t);
-    });
+    getSupabaseToken()
+      .then((t) => {
+        if (active) setToken(t);
+      })
+      .finally(() => {
+        if (active) setAuthLoading(false);
+      });
 
     const { data: subscription } = supabase
       ? supabase.auth.onAuthStateChange((_event, session) => {
           if (!active) return;
-          const next = session?.access_token || null;
-          if (next) {
-            auth.setToken(next);
-          }
+          const next = session?.access_token;
+          // Hosted Google OAuth is persisted by the backend refresh cookie.
+          // This browser client intentionally does not persist a Supabase
+          // session, so its initial null event must not erase that session.
+          if (!next) return;
+          auth.setToken(next);
           setToken(next);
+          setAuthLoading(false);
           const email = session?.user?.email || '';
           if (email) setCommentAuthor(email.split('@')[0]);
         })
@@ -621,6 +629,14 @@ export function ChatView() {
             threadId: {threadId || '<empty>'}
           </div>
         )}
+      </div>
+    );
+  }
+
+  if (authLoading) {
+    return (
+      <div className="flex h-full items-center justify-center text-slate-600">
+        Checking session...
       </div>
     );
   }

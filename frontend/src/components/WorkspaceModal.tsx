@@ -1,15 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { getSupabaseToken } from "@/lib/apiFetch";
+import { API_BASE_URL, getSupabaseToken } from "@/lib/apiFetch";
 
 type Props = {
   threadId: string;
   onClose: () => void;
   onSuccess?: (threadId: string) => void;
 };
-
-const API_BASE = process.env.NEXT_PUBLIC_BACKEND_API_BASE_URL;
 
 export function WorkspaceModal({ threadId, onClose, onSuccess }: Props) {
   const [emailInput, setEmailInput] = useState("");
@@ -45,7 +43,7 @@ export function WorkspaceModal({ threadId, onClose, onSuccess }: Props) {
         return;
       }
 
-      const res = await fetch(`${API_BASE}/threads/${threadId}/workspace`, {
+      const res = await fetch(`${API_BASE_URL}/threads/${threadId}/workspace`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

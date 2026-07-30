@@ -2,23 +2,27 @@
 const nextConfig = {
   poweredByHeader: false,
   async headers() {
+    const isProduction = process.env.NODE_ENV === "production";
     const connectSources =
-      process.env.NODE_ENV === "production"
+      isProduction
         ? "connect-src 'self' https:"
         : "connect-src 'self' https: http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*";
+    const scriptSources = isProduction
+      ? "script-src 'self' 'unsafe-inline'"
+      : "script-src 'self' 'unsafe-inline' 'unsafe-eval'";
     const directives = [
       "default-src 'self'",
       "base-uri 'self'",
       "object-src 'none'",
       "frame-ancestors 'none'",
       "form-action 'self'",
-      "script-src 'self' 'unsafe-inline'",
+      scriptSources,
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",
       connectSources,
     ];
-    if (process.env.NODE_ENV === "production") {
+    if (isProduction) {
       directives.push("upgrade-insecure-requests");
     }
     const headers = [
@@ -31,7 +35,7 @@ const nextConfig = {
         value: "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
       },
     ];
-    if (process.env.NODE_ENV === "production") {
+    if (isProduction) {
       headers.push({
         key: "Strict-Transport-Security",
         value: "max-age=31536000; includeSubDomains",
