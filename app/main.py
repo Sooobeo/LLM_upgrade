@@ -9,6 +9,13 @@ from app.core.config import settings
 from app.core.middleware import RequestGuardMiddleware, SecurityHeadersMiddleware
 from app.routes import auth, comment, health, thread, user, debug
 
+missing_required_settings = settings.missing_required_settings
+if missing_required_settings:
+    logging.getLogger(__name__).critical(
+        "Missing required backend environment variables: %s",
+        ", ".join(missing_required_settings),
+    )
+
 production_docs_enabled = settings.APP_ENV.value != "prod" or settings.ENABLE_PRODUCTION_API_DOCS
 app = FastAPI(
     title=settings.PROJECT_NAME,

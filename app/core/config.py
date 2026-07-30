@@ -53,10 +53,12 @@ class Settings(BaseSettings):
 
     # --- Supabase ---
     SUPABASE_URL: str = Field(
+        default="",
         validation_alias=AliasChoices("SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL"),
     )
     # A 모드에서 필수 (클라이언트 토큰 전달 + anon 키)
     SUPABASE_ANON_KEY: str = Field(
+        default="",
         validation_alias=AliasChoices("SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_ANON_KEY"),
     )
 
@@ -105,6 +107,14 @@ class Settings(BaseSettings):
     def trusted_hosts(self) -> list[str]:
         return [value.strip() for value in self.TRUSTED_HOSTS.split(",") if value.strip()]
 
+    @property
+    def missing_required_settings(self) -> list[str]:
+        required = {
+            "SUPABASE_URL": self.SUPABASE_URL,
+            "SUPABASE_ANON_KEY": self.SUPABASE_ANON_KEY,
+        }
+        return [name for name, value in required.items() if not value.strip()]
+
     @field_validator("APP_ENV", mode="before")
     @classmethod
     def _normalize_app_env(cls, value: object) -> object:
@@ -121,5 +131,10 @@ class Settings(BaseSettings):
     @classmethod
     def _strip_url(cls, v: str) -> str:
         return v.strip().rstrip("/")
+
+    @field_validator("SUPABASE_ANON_KEY")
+    @classmethod
+    def _strip_anon_key(cls, v: str) -> str:
+        return v.strip()
 
 settings = Settings()

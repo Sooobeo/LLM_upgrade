@@ -31,6 +31,13 @@ def test_security_headers_are_set():
     assert response.headers["cache-control"] == "no-store"
 
 
+def test_deployment_config_health_does_not_expose_secret_values():
+    response = client.get("/health/config")
+
+    assert response.status_code == 200
+    assert set(response.json()) == {"ok", "app_env", "missing"}
+
+
 def test_untrusted_browser_origin_is_rejected_for_refresh():
     response = client.post(
         "/auth/refresh",

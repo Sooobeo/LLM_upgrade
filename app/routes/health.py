@@ -1,9 +1,20 @@
 from fastapi import APIRouter, Depends
 
+from app.core.config import settings
 from app.db.deps import get_current_user
 from app.services import llm_client
 
 router = APIRouter(prefix="/health", tags=["health"])
+
+
+@router.get("/config", include_in_schema=False)
+def deployment_config():
+    missing = settings.missing_required_settings
+    return {
+        "ok": not missing,
+        "app_env": settings.APP_ENV.value,
+        "missing": missing,
+    }
 
 
 @router.get("/llm")
