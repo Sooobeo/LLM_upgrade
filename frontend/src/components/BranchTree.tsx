@@ -849,12 +849,31 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
       ref={viewportRef}
       className="relative h-[min(65dvh,36rem)] min-h-[420px] w-full touch-none select-none overflow-hidden rounded-xl border border-cyan-300/15 bg-slate-950/45 shadow-inner shadow-cyan-950/30 sm:h-[calc(100dvh-15rem)] sm:min-h-[520px] sm:rounded-2xl"
       role="tree"
+      aria-busy={commentsLoading || positionsLoading}
       aria-label={`${root.title || "제목 없는 스레드"} 브랜치 트리`}
       onPointerDown={startCanvasPointer}
       onPointerMove={moveCanvasPointer}
       onPointerUp={finishCanvasPointer}
       onPointerCancel={finishCanvasPointer}
     >
+      {(commentsLoading || positionsLoading) && (
+        <div className="absolute inset-0 z-[60] flex items-center justify-center bg-slate-950/45 px-4 backdrop-blur-[2px]">
+          <div
+            role="status"
+            aria-live="polite"
+            className="rounded-2xl border border-cyan-200/20 bg-slate-950/90 px-6 py-5 text-center text-white shadow-2xl shadow-cyan-950/40"
+          >
+            <span
+              aria-hidden="true"
+              className="mx-auto block h-9 w-9 animate-spin rounded-full border-[3px] border-cyan-100/20 border-t-cyan-300 shadow-[0_0_18px_rgba(103,232,249,0.28)]"
+            />
+            <p className="mt-3 text-sm font-semibold text-white">
+              브랜치와 코멘트를 불러오는 중...
+            </p>
+          </div>
+        </div>
+      )}
+
       <button
         type="button"
         onClick={() => void resetNodePositions()}

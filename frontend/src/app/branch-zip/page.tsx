@@ -25,6 +25,10 @@ export default function BranchZipPage() {
 
   useEffect(() => {
     let active = true;
+    const requestedRootId = new URLSearchParams(window.location.search).get(
+      "root",
+    );
+    if (requestedRootId) setExpandedRootId(requestedRootId);
 
     getSupabaseToken()
       .then((nextToken) => {
@@ -194,7 +198,11 @@ export default function BranchZipPage() {
                 <BranchTree
                   root={expandedRoot}
                   token={token!}
-                  onSelect={(threadId) => router.push(`/threads/${threadId}`)}
+                  onSelect={(threadId) =>
+                    router.push(
+                      `/threads/${threadId}?from=branch-zip&root=${encodeURIComponent(expandedRoot.id)}`,
+                    )
+                  }
                   onDelete={removeNode}
                 />
               </div>

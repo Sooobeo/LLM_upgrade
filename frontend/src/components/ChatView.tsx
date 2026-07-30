@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Pencil, Trash2, Check, X, GitBranch } from 'lucide-react';
 
 import { getModel, setModel } from '@/lib/modelStore';
@@ -59,6 +59,7 @@ function ChatLoading({ label }: { label: string }) {
 export function ChatView() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const threadId = params?.threadId ? String(params.threadId) : '';
   const queryClient = useQueryClient();
 
@@ -262,9 +263,14 @@ export function ChatView() {
   });
 
   const isWorkspace = !!data?.is_workspace;
-  const backHref = data?.root_thread_id
-    ? `/thread-folders/${data.root_thread_id}`
-    : '/threads';
+  const returnSource = searchParams.get('from');
+  const returnRootId = searchParams.get('root');
+  const isBranchZipReturn = returnSource === 'branch-zip';
+  const backHref = isBranchZipReturn
+    ? `/branch-zip${returnRootId ? `?root=${encodeURIComponent(returnRootId)}` : ''}`
+    : data?.root_thread_id
+      ? `/thread-folders/${data.root_thread_id}`
+      : '/threads';
 
   const { data: bookmarkRows = [], error: bookmarkError } = useQuery<
     ThreadBookmark[]
@@ -696,7 +702,9 @@ export function ChatView() {
               <button
                 onClick={() => router.push(backHref)}
                 aria-label={
-                  data?.root_thread_id
+                  isBranchZipReturn
+                    ? '브랜치 시각화로 돌아가기'
+                    : data?.root_thread_id
                     ? '브랜치 폴더로 돌아가기'
                     : '스레드 목록으로 돌아가기'
                 }
@@ -785,7 +793,7 @@ export function ChatView() {
             </div>
 
             <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
-              <label className="hidden text-xs font-semibold text-white/60 sm:block">
+              <label className="hidden text-xs font-semibold text-white sm:block">
                 Model
               </label>
               <select
@@ -797,13 +805,17 @@ export function ChatView() {
                 className="min-h-10 min-w-0 flex-1 rounded-lg border border-white/10 bg-slate-900/80 px-2 py-1 text-sm text-white focus:outline-none sm:flex-none"
               >
                 {MODEL_OPTIONS.map((m) => (
-                  <option key={m} value={m} className="text-black">
+                  <option
+                    key={m}
+                    value={m}
+                    className="bg-slate-900 text-white"
+                  >
                     {m}
                   </option>
                 ))}
               </select>
               {selectedModel === 'gemini-2.5-flash' && (
-                <span className="hidden text-[10px] text-amber-200 sm:inline">
+                <span className="hidden text-[10px] text-white/75 sm:inline">
                   최신 Flash 호환 실행
                 </span>
               )}
