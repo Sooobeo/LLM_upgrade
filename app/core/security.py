@@ -42,7 +42,7 @@ def require_trusted_origin(request: Request) -> None:
     # "cross-site". In that case the explicit Origin allow-list is the trust
     # boundary. Reject cross-site requests without an Origin as well as any
     # request whose Origin is not allow-listed.
-    origin_is_allowed = bool(origin) and origin in settings.cors_origins
+    origin_is_allowed = bool(origin) and settings.is_allowed_origin(origin)
     if (origin and not origin_is_allowed) or (fetch_site == "cross-site" and not origin_is_allowed):
         raise HTTPException(
             status_code=403,

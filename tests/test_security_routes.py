@@ -128,6 +128,41 @@ def test_google_login_url_supports_frontend_loading_ui(monkeypatch):
     assert "provider=google" in authorize_url
 
 
+def test_google_login_url_accepts_project_preview_origin():
+    preview_origin = "https://happyllm-preview123-sooobeo1.vercel.app"
+
+    response = client.get(
+        "/auth/google/url",
+        params={"redirect_to": f"{preview_origin}/auth/callback"},
+        headers={"Origin": preview_origin},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == preview_origin
+
+
+def test_production_preview_login_uses_stable_callback(monkeypatch):
+    preview_origin = "https://happyllm-preview123-sooobeo1.vercel.app"
+    monkeypatch.setattr(settings, "APP_ENV", AppEnv.prod)
+    monkeypatch.setattr(
+        settings,
+        "CORS_ORIGINS",
+        "https://happyllm.vercel.app",
+    )
+
+    response = client.get(
+        "/auth/google/url",
+        params={"redirect_to": f"{preview_origin}/auth/callback"},
+        headers={"Origin": preview_origin},
+    )
+
+    assert response.status_code == 200
+    assert (
+        "redirect_to=https%3A%2F%2Fhappyllm.vercel.app%2Fauth%2Fcallback"
+        in response.json()["authorize_url"]
+    )
+
+
 def test_google_login_url_rejects_untrusted_redirect():
     response = client.get(
         "/auth/google/url",

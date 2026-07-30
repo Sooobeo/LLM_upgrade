@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
+import re
 
 from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -30,6 +31,12 @@ class Settings(BaseSettings):
     # --- 환경 구분 ---
     APP_ENV: AppEnv = Field(default=AppEnv.local)
     CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
+    CORS_ORIGIN_REGEX: str = (
+        r"^https://happyllm(?:-[a-z0-9-]+-sooobeo1)?\.vercel\.app$"
+    )
+    GOOGLE_OAUTH_REDIRECT_URL: str = (
+        "https://happyllm.vercel.app/auth/callback"
+    )
     TRUSTED_HOSTS: str = "localhost,127.0.0.1,testserver"
     MAX_REQUEST_BODY_BYTES: int = 1_048_576
     AUTH_RATE_LIMIT_PER_MINUTE: int = 20
@@ -102,6 +109,18 @@ class Settings(BaseSettings):
     @property
     def cors_origins(self) -> list[str]:
         return [value.strip().rstrip("/") for value in self.CORS_ORIGINS.split(",") if value.strip()]
+
+    @property
+    def cors_origin_regex(self) -> str | None:
+        value = self.CORS_ORIGIN_REGEX.strip()
+        return value or None
+
+    def is_allowed_origin(self, origin: str) -> bool:
+        normalized = origin.strip().rstrip("/")
+        if normalized in self.cors_origins:
+            return True
+        pattern = self.cors_origin_regex
+        return bool(pattern and re.fullmatch(pattern, normalized))
 
     @property
     def trusted_hosts(self) -> list[str]:

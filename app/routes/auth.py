@@ -55,7 +55,7 @@ def _google_authorize_url(redirect_to: Optional[str] = None) -> str:
         if (
             parsed.scheme not in {"http", "https"}
             or not parsed.netloc
-            or redirect_origin not in settings.cors_origins
+            or not settings.is_allowed_origin(redirect_origin)
         ):
             raise HTTPException(
                 status_code=400,
@@ -64,7 +64,27 @@ def _google_authorize_url(redirect_to: Optional[str] = None) -> str:
                     "message": "현재 사이트 주소가 Google 로그인 허용 목록에 없습니다.",
                 },
             )
-        query["redirect_to"] = redirect_to
+        oauth_redirect_to = redirect_to
+        if settings.APP_ENV.value == "prod" and settings.GOOGLE_OAUTH_REDIRECT_URL:
+            configured_redirect = settings.GOOGLE_OAUTH_REDIRECT_URL.strip()
+            configured = urlsplit(configured_redirect)
+            configured_origin = (
+                f"{configured.scheme}://{configured.netloc}".rstrip("/")
+            )
+            if (
+                configured.scheme != "https"
+                or not configured.netloc
+                or not settings.is_allowed_origin(configured_origin)
+            ):
+                raise HTTPException(
+                    status_code=503,
+                    detail={
+                        "code": "INVALID_OAUTH_CONFIG",
+                        "message": "Google 로그인 callback 설정이 올바르지 않습니다.",
+                    },
+                )
+            oauth_redirect_to = configured_redirect
+        query["redirect_to"] = oauth_redirect_to
     return f"{base}/auth/v1/authorize?{urlencode(query)}"
 
 
