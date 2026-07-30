@@ -72,7 +72,7 @@ export default function LandingPage() {
             Conversation archive
           </span>
 
-          <h1 className="bg-gradient-to-r from-blue-300 via-white to-cyan-300 bg-clip-text text-4xl font-extrabold leading-tight text-transparent md:text-6xl">
+          <h1 className="bg-gradient-to-r from-blue-300 via-white to-cyan-300 bg-clip-text pb-2 text-4xl font-extrabold leading-[1.18] text-transparent md:text-6xl md:leading-[1.16]">
             llm upgrade: chat archiving
           </h1>
 
