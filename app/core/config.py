@@ -7,6 +7,13 @@ from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+REQUIRED_CORS_ORIGINS = (
+    "https://happyllm.vercel.app",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+)
+
+
 class AppEnv(str, Enum):
     local = "local"
     dev = "dev"
@@ -110,7 +117,15 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins(self) -> list[str]:
-        return [value.strip().rstrip("/") for value in self.CORS_ORIGINS.split(",") if value.strip()]
+        configured = [
+            value.strip().rstrip("/")
+            for value in self.CORS_ORIGINS.split(",")
+            if value.strip()
+        ]
+        # Render environment variables override class defaults. Keep the known
+        # production frontend and local development origins even when an old
+        # CORS_ORIGINS value remains in the Render dashboard.
+        return list(dict.fromkeys([*configured, *REQUIRED_CORS_ORIGINS]))
 
     @property
     def cors_origin_regex(self) -> str | None:

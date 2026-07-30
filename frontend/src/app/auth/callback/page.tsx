@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { API_BASE_URL } from "@/lib/apiFetch";
 
 type TokenParams = Record<string, string>;
 
@@ -52,7 +51,7 @@ export default function AuthCallbackPage() {
       return;
     }
 
-    fetch(`${API_BASE_URL}/auth/google/set-session`, {
+    fetch("/api/auth/google-session", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",

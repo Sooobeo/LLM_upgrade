@@ -57,3 +57,17 @@ def test_vercel_preview_origin_is_narrowly_allowlisted():
     assert not config.is_allowed_origin(
         "https://happyllm-preview123-other-team.vercel.app"
     )
+
+
+def test_production_origin_survives_stale_render_cors_environment():
+    config = Settings(
+        _env_file=None,
+        CORS_ORIGINS="https://old-frontend.example.com",
+        CORS_ORIGIN_REGEX="",
+        SUPABASE_URL="https://project.example.supabase.co",
+        SUPABASE_ANON_KEY="anon-key",
+    )
+
+    assert config.is_allowed_origin("https://happyllm.vercel.app")
+    assert "https://happyllm.vercel.app" in config.cors_origins
+    assert "https://old-frontend.example.com" in config.cors_origins

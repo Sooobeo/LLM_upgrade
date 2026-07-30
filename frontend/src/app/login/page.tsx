@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { auth } from "@/lib/auth";
-import { API_BASE_URL } from "@/lib/apiFetch";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -15,7 +14,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     let active = true;
-    fetch(`${API_BASE_URL}/auth/refresh`, {
+    fetch("/api/auth/refresh", {
       method: "POST",
       credentials: "include",
     }).then(async (response) => {
@@ -37,7 +36,7 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/login/password`, {
+      const response = await fetch("/api/auth/password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

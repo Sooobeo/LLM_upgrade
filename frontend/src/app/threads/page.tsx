@@ -22,7 +22,7 @@ import {
   updateThreadTitle,
 } from "@/lib/threadApi";
 import { supabase } from "@/lib/supabaseClient";
-import { API_BASE_URL, getSupabaseToken } from "@/lib/apiFetch";
+import { getSupabaseToken } from "@/lib/apiFetch";
 import { WorkspaceModal } from "@/components/WorkspaceModal";
 import { WorkspaceMembersModal } from "@/components/WorkspaceMembersModal";
 
@@ -128,7 +128,7 @@ export default function ThreadsPage() {
   const logout = async () => {
     const currentToken = auth.getToken();
     try {
-      await fetch(`${API_BASE_URL}/auth/logout`, {
+      await fetch("/api/auth/logout", {
         method: "POST",
         credentials: "include",
         headers: currentToken ? { Authorization: `Bearer ${currentToken}` } : {},

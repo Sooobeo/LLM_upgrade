@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 
-import { API_BASE_URL } from "@/lib/apiFetch";
+import { SUPABASE_PROJECT_URL } from "@/lib/supabaseClient";
 
 export default function LandingPage() {
   const router = useRouter();
@@ -14,45 +14,26 @@ export default function LandingPage() {
   const [googleLoginError, setGoogleLoginError] = useState<string | null>(null);
   const [oauthRedirecting, setOauthRedirecting] = useState(false);
 
-  const handleGoogleLogin = async () => {
+  const handleGoogleLogin = () => {
     setGoogleLoginLoading(true);
     setGoogleLoginError(null);
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), 25_000);
     try {
-      const oauthRequestUrl = new URL("/auth/google/url", API_BASE_URL);
-      oauthRequestUrl.searchParams.set(
+      const authorizeUrl = new URL(
+        "/auth/v1/authorize",
+        SUPABASE_PROJECT_URL,
+      );
+      authorizeUrl.searchParams.set("provider", "google");
+      authorizeUrl.searchParams.set(
         "redirect_to",
-        `${window.location.origin}/auth/callback`,
+        window.location.hostname === "localhost" ||
+          window.location.hostname === "127.0.0.1"
+          ? window.location.origin
+          : "https://happyllm.vercel.app",
       );
-      const response = await fetch(oauthRequestUrl.toString(), {
-        method: "GET",
-        headers: { Accept: "application/json" },
-        signal: controller.signal,
-      });
-      const data = await response.json().catch(() => null);
-      if (!response.ok || !data?.authorize_url) {
-        const detail = data?.detail;
-        const message =
-          typeof detail === "string"
-            ? detail
-            : detail?.message || "Google 로그인을 시작하지 못했습니다.";
-        throw new Error(message);
-      }
-      window.location.assign(data.authorize_url);
-    } catch (error) {
+      window.location.assign(authorizeUrl.toString());
+    } catch {
       setGoogleLoginLoading(false);
-      setGoogleLoginError(
-        error instanceof DOMException && error.name === "AbortError"
-          ? "로그인 서버 응답이 지연되고 있습니다. 잠시 후 다시 시도해 주세요."
-          : error instanceof TypeError
-            ? "로그인 서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요."
-          : error instanceof Error
-            ? error.message
-            : "Google 로그인을 시작하지 못했습니다.",
-      );
-    } finally {
-      window.clearTimeout(timeoutId);
+      setGoogleLoginError("Google 로그인 주소를 만들지 못했습니다.");
     }
   };
 

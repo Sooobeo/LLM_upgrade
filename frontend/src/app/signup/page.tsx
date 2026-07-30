@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { API_BASE_URL } from "@/lib/apiFetch";
 
 export default function SignupPage() {
   const [nickname, setNickname] = useState("");
@@ -20,7 +19,7 @@ export default function SignupPage() {
     setOk(false);
 
     try {
-      const res = await fetch(`${API_BASE_URL}/auth/signup/password`, {
+      const res = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

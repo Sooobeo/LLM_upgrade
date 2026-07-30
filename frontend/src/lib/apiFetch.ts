@@ -41,7 +41,7 @@ export async function refreshBackendAccessToken(): Promise<string | null> {
   if (refreshPromise) return refreshPromise;
   const request = (async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      const response = await fetch("/api/auth/refresh", {
         method: "POST",
         credentials: "include",
       });
