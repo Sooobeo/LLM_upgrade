@@ -36,7 +36,7 @@ app.add_middleware(
     allow_origins=settings.cors_origins,
     allow_origin_regex=settings.cors_origin_regex,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept"],
 )
 app.add_middleware(SecurityHeadersMiddleware)
@@ -70,6 +70,7 @@ app.include_router(auth.router)
 app.include_router(user.router)
 app.include_router(comment.router)
 app.include_router(comment.branch_router)
+app.include_router(comment.position_router)
 if settings.APP_ENV.value != "prod":
     app.include_router(debug.router)
 

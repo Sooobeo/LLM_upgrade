@@ -262,6 +262,9 @@ export function ChatView() {
   });
 
   const isWorkspace = !!data?.is_workspace;
+  const backHref = data?.root_thread_id
+    ? `/thread-folders/${data.root_thread_id}`
+    : '/threads';
 
   const { data: bookmarkRows = [], error: bookmarkError } = useQuery<
     ThreadBookmark[]
@@ -691,8 +694,12 @@ export function ChatView() {
           <div className="flex flex-wrap items-start justify-between gap-3 p-1 sm:items-center sm:p-2">
             <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
               <button
-                onClick={() => router.push('/threads')}
-                aria-label="스레드 목록으로 돌아가기"
+                onClick={() => router.push(backHref)}
+                aria-label={
+                  data?.root_thread_id
+                    ? '브랜치 폴더로 돌아가기'
+                    : '스레드 목록으로 돌아가기'
+                }
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-sm font-semibold text-white/80 hover:bg-white/10"
               >
                 ←

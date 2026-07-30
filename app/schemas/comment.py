@@ -3,7 +3,7 @@ from typing import Optional
 from pydantic import BaseModel, Field, model_validator
 
 class CommentCreate(BaseModel):
-    message_index: int = Field(..., ge=0, lt=2_147_483_647)
+    message_index: int = Field(..., ge=0, lt=2_147_483_646)
     content: str = Field(..., min_length=1, max_length=4000)
 
 
@@ -54,6 +54,18 @@ class BranchCommentResponse(BaseModel):
     author_id: str
     can_edit: bool = False
     content: str
+    position_x: float
+    position_y: float
+    created_at: Optional[str] = None
+
+
+class BranchPositionUpdate(BaseModel):
+    position_x: float = Field(..., ge=-10000, le=10000)
+    position_y: float = Field(..., ge=-10000, le=10000)
+
+
+class BranchPositionResponse(BaseModel):
+    thread_id: str
     position_x: float
     position_y: float
     created_at: Optional[str] = None

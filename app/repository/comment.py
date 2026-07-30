@@ -11,6 +11,8 @@ from app.db import supabase as sb
 
 BRANCH_COMMENT_MESSAGE_INDEX = 2_147_483_647
 BRANCH_COMMENT_PREFIX = "__branch_node_comment_v1__:"
+BRANCH_NODE_POSITION_MESSAGE_INDEX = 2_147_483_646
+BRANCH_NODE_POSITION_PREFIX = "__branch_node_position_v1__:"
 
 
 class BranchCommentForbiddenError(Exception):
@@ -19,6 +21,37 @@ class BranchCommentForbiddenError(Exception):
 
 class BranchCommentNotFoundError(Exception):
     pass
+
+
+def _encode_branch_position(position_x: float, position_y: float) -> str:
+    return BRANCH_NODE_POSITION_PREFIX + json.dumps(
+        {"x": float(position_x), "y": float(position_y)},
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+
+
+def _decode_branch_position(row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    raw = row.get("content")
+    if not isinstance(raw, str) or not raw.startswith(BRANCH_NODE_POSITION_PREFIX):
+        return None
+
+    try:
+        payload = json.loads(raw[len(BRANCH_NODE_POSITION_PREFIX) :])
+        position_x = float(payload["x"])
+        position_y = float(payload["y"])
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+        return None
+
+    if not math.isfinite(position_x) or not math.isfinite(position_y):
+        return None
+
+    return {
+        "thread_id": str(row["thread_id"]),
+        "position_x": position_x,
+        "position_y": position_y,
+        "created_at": row.get("created_at"),
+    }
 
 
 def _encode_branch_comment(
@@ -269,3 +302,132 @@ def delete_branch_comment(
         access_token,
     )
     return deleted > 0
+
+
+def list_branch_positions(
+    owner_id: str,
+    thread_ids: Iterable[str],
+    access_token: str,
+) -> List[Dict[str, Any]]:
+    accessible_ids = _accessible_thread_ids(owner_id, thread_ids, access_token)
+    if not accessible_ids:
+        return []
+
+    safe_ids = ",".join(quote(thread_id) for thread_id in accessible_ids)
+    rows = sb.rest_select(
+        "comments",
+        "&".join(
+            [
+                "select=thread_id,content,created_at",
+                f"thread_id=in.({safe_ids})",
+                f"user_id=eq.{quote(owner_id)}",
+                f"message_index=eq.{BRANCH_NODE_POSITION_MESSAGE_INDEX}",
+                "order=created_at.asc",
+            ]
+        ),
+        access_token,
+    )
+    decoded = (_decode_branch_position(row) for row in rows)
+    return [position for position in decoded if position is not None]
+
+
+def save_branch_position(
+    owner_id: str,
+    thread_id: str,
+    position_x: float,
+    position_y: float,
+    access_token: str,
+) -> Dict[str, Any]:
+    if not _accessible_thread_ids(owner_id, [thread_id], access_token):
+        raise BranchCommentForbiddenError
+
+    filters = "&".join(
+        [
+            "select=id,thread_id,content,created_at",
+            f"thread_id=eq.{quote(thread_id)}",
+            f"user_id=eq.{quote(owner_id)}",
+            f"message_index=eq.{BRANCH_NODE_POSITION_MESSAGE_INDEX}",
+            "limit=1",
+        ]
+    )
+    rows = sb.rest_select("comments", filters, access_token)
+    encoded = _encode_branch_position(position_x, position_y)
+
+    if rows:
+        position_id = str(rows[0]["id"])
+        updated_rows = sb.rest_update(
+            "comments",
+            "&".join(
+                [
+                    f"id=eq.{quote(position_id)}",
+                    f"user_id=eq.{quote(owner_id)}",
+                    f"message_index=eq.{BRANCH_NODE_POSITION_MESSAGE_INDEX}",
+                ]
+            ),
+            {"content": encoded},
+            access_token,
+        )
+        row = (
+            updated_rows[0]
+            if isinstance(updated_rows, list) and updated_rows
+            else None
+        )
+    else:
+        position_id = str(uuid4())
+        sb.rest_insert(
+            "comments",
+            [
+                {
+                    "id": position_id,
+                    "thread_id": thread_id,
+                    "message_index": BRANCH_NODE_POSITION_MESSAGE_INDEX,
+                    "user_id": owner_id,
+                    "content": encoded,
+                }
+            ],
+            access_token,
+        )
+        inserted_rows = sb.rest_select(
+            "comments",
+            "&".join(
+                [
+                    "select=id,thread_id,content,created_at",
+                    f"id=eq.{quote(position_id)}",
+                    f"user_id=eq.{quote(owner_id)}",
+                    "limit=1",
+                ]
+            ),
+            access_token,
+        )
+        row = inserted_rows[0] if inserted_rows else None
+
+    decoded = _decode_branch_position(row) if row else None
+    if decoded is None:
+        raise BranchCommentNotFoundError
+    return decoded
+
+
+def delete_branch_positions(
+    owner_id: str,
+    thread_ids: Iterable[str],
+    access_token: str,
+) -> int:
+    unique_ids = list(dict.fromkeys(str(thread_id) for thread_id in thread_ids))
+    accessible_ids = _accessible_thread_ids(owner_id, unique_ids, access_token)
+    if len(accessible_ids) != len(unique_ids):
+        raise BranchCommentForbiddenError
+    if not accessible_ids:
+        return 0
+
+    safe_ids = ",".join(quote(thread_id) for thread_id in accessible_ids)
+    return sb.rest_delete(
+        "comments",
+        "&".join(
+            [
+                f"thread_id=in.({safe_ids})",
+                f"user_id=eq.{quote(owner_id)}",
+                f"message_index=eq.{BRANCH_NODE_POSITION_MESSAGE_INDEX}",
+            ]
+        ),
+        access_token,
+    )

@@ -29,6 +29,7 @@ export type ThreadDetail = {
   can_manage_workspace?: boolean;
   can_rename?: boolean;
   parent_thread_id?: string | null;
+  root_thread_id?: string | null;
   context_preview?: string | null;
 };
 
@@ -93,6 +94,13 @@ export type BranchNodeComment = {
   author_id: string;
   can_edit: boolean;
   content: string;
+  position_x: number;
+  position_y: number;
+  created_at?: string | null;
+};
+
+export type BranchNodePosition = {
+  thread_id: string;
   position_x: number;
   position_y: number;
   created_at?: string | null;
@@ -203,6 +211,51 @@ export async function deleteBranchNodeComment(
 ) {
   return apiFetch(
     `/branch-comments/${commentId}`,
+    { method: "DELETE" },
+    token,
+    onDebug,
+  );
+}
+
+export async function listBranchNodePositions(
+  threadIds: string[],
+  token: string,
+  onDebug?: (info: FetchDebug) => void,
+): Promise<BranchNodePosition[]> {
+  const search = new URLSearchParams();
+  threadIds.forEach((threadId) => search.append("thread_id", threadId));
+  const data = await apiFetch(
+    `/branch-positions?${search.toString()}`,
+    { method: "GET" },
+    token,
+    onDebug,
+  );
+  return Array.isArray(data) ? data : [];
+}
+
+export async function updateBranchNodePosition(
+  threadId: string,
+  position: { position_x: number; position_y: number },
+  token: string,
+  onDebug?: (info: FetchDebug) => void,
+): Promise<BranchNodePosition> {
+  return apiFetch(
+    `/branch-positions/${threadId}`,
+    { method: "PUT", body: position },
+    token,
+    onDebug,
+  );
+}
+
+export async function resetBranchNodePositions(
+  threadIds: string[],
+  token: string,
+  onDebug?: (info: FetchDebug) => void,
+) {
+  const search = new URLSearchParams();
+  threadIds.forEach((threadId) => search.append("thread_id", threadId));
+  return apiFetch(
+    `/branch-positions?${search.toString()}`,
     { method: "DELETE" },
     token,
     onDebug,

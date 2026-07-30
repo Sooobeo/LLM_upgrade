@@ -41,6 +41,10 @@ export default function ThreadFolderPage() {
   const [folderTitle, setFolderTitle] = useState("");
   const [folderBusy, setFolderBusy] = useState(false);
   const [folderError, setFolderError] = useState<string | null>(null);
+  const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+  const [nodeTitleDraft, setNodeTitleDraft] = useState("");
+  const [nodeTitleBusy, setNodeTitleBusy] = useState(false);
+  const [nodeTitleError, setNodeTitleError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BranchNode | null>(null);
   const [deleteSuccessOpen, setDeleteSuccessOpen] = useState(false);
   const [workspaceCreateOpen, setWorkspaceCreateOpen] = useState(false);
@@ -129,6 +133,33 @@ export default function ThreadFolderPage() {
     }
     await refetch();
     setDeleteSuccessOpen(true);
+  };
+
+  const saveNodeTitle = async (node: BranchNode) => {
+    const title = nodeTitleDraft.trim();
+    if (!token || !title) {
+      setNodeTitleError("스레드명을 입력하세요.");
+      return;
+    }
+    setNodeTitleBusy(true);
+    setNodeTitleError(null);
+    try {
+      await updateThreadTitle(node.id, title, token);
+      await Promise.all([
+        refetch(),
+        queryClient.invalidateQueries({ queryKey: ["threads"] }),
+      ]);
+      setEditingNodeId(null);
+      setNodeTitleDraft("");
+    } catch (renameError) {
+      setNodeTitleError(
+        renameError instanceof Error
+          ? renameError.message
+          : "스레드명을 수정하지 못했습니다.",
+      );
+    } finally {
+      setNodeTitleBusy(false);
+    }
   };
 
   return (
@@ -355,9 +386,82 @@ export default function ThreadFolderPage() {
                           )}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <h3 className="line-clamp-2 text-sm font-semibold leading-5 text-white">
-                            {node.title || "제목 없는 스레드"}
-                          </h3>
+                          {editingNodeId === node.id ? (
+                            <div>
+                              <div className="flex min-w-0 items-center gap-1">
+                                <input
+                                  autoFocus
+                                  value={nodeTitleDraft}
+                                  maxLength={200}
+                                  disabled={nodeTitleBusy}
+                                  onChange={(event) =>
+                                    setNodeTitleDraft(event.target.value)
+                                  }
+                                  onKeyDown={(event) => {
+                                    if (event.key === "Enter") {
+                                      event.preventDefault();
+                                      void saveNodeTitle(node);
+                                    } else if (event.key === "Escape") {
+                                      setEditingNodeId(null);
+                                      setNodeTitleError(null);
+                                    }
+                                  }}
+                                  aria-label="브랜치 스레드명"
+                                  className="min-w-0 flex-1 rounded-lg border border-cyan-200/25 bg-black/25 px-2 py-1 text-sm font-semibold text-white outline-none focus:ring-2 focus:ring-cyan-200/30"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => void saveNodeTitle(node)}
+                                  disabled={nodeTitleBusy}
+                                  aria-label="스레드명 저장"
+                                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-emerald-300 transition hover:bg-emerald-300/10 disabled:opacity-40"
+                                >
+                                  {nodeTitleBusy ? (
+                                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-300 border-t-transparent" />
+                                  ) : (
+                                    <Check size={15} />
+                                  )}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingNodeId(null);
+                                    setNodeTitleError(null);
+                                  }}
+                                  disabled={nodeTitleBusy}
+                                  aria-label="스레드명 수정 취소"
+                                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white/45 transition hover:bg-white/10 disabled:opacity-40"
+                                >
+                                  <X size={15} />
+                                </button>
+                              </div>
+                              {nodeTitleError && (
+                                <p className="mt-1 text-[10px] text-rose-300">
+                                  {nodeTitleError}
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="flex min-w-0 items-start gap-1">
+                              <h3 className="min-w-0 flex-1 line-clamp-2 text-sm font-semibold leading-5 text-white">
+                                {node.title || "제목 없는 스레드"}
+                              </h3>
+                              {node.can_manage && !node.is_deleted && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingNodeId(node.id);
+                                    setNodeTitleDraft(node.title || "");
+                                    setNodeTitleError(null);
+                                  }}
+                                  aria-label={`${node.title || "제목 없는 스레드"} 제목 수정`}
+                                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white/45 transition hover:bg-cyan-300/10 hover:text-cyan-100"
+                                >
+                                  <Pencil size={13} />
+                                </button>
+                              )}
+                            </div>
+                          )}
                           <p className="mt-2 truncate text-[10px] text-white/45">
                             {node.created_at
                               ? new Date(node.created_at).toLocaleString()

@@ -8,17 +8,22 @@ from app.schemas.comment import (
     BranchCommentCreate,
     BranchCommentResponse,
     BranchCommentUpdate,
+    BranchPositionResponse,
+    BranchPositionUpdate,
     CommentCreate,
     CommentResponse,
     CommentUpdate,
 )
 from app.repository.comment import (
-    BRANCH_COMMENT_MESSAGE_INDEX,
+    BRANCH_NODE_POSITION_MESSAGE_INDEX,
     BranchCommentForbiddenError,
     BranchCommentNotFoundError,
     create_branch_comment,
+    delete_branch_positions,
     delete_branch_comment,
+    list_branch_positions,
     list_branch_comments,
+    save_branch_position,
     update_branch_comment,
     _accessible_thread_ids,
 )
@@ -28,6 +33,10 @@ from app.db.supabase_users import get_users_by_ids
 
 router = APIRouter(prefix="/threads", tags=["comments"])
 branch_router = APIRouter(prefix="/branch-comments", tags=["branch-comments"])
+position_router = APIRouter(
+    prefix="/branch-positions",
+    tags=["branch-positions"],
+)
 
 
 def _owner_id(user) -> str:
@@ -189,6 +198,75 @@ def remove_branch_comment(
     return {"ok": True}
 
 
+@position_router.get("", response_model=List[BranchPositionResponse])
+def get_branch_positions(
+    thread_id: List[UUID] = Query(..., min_length=1, max_length=100),
+    user=Depends(get_current_user),
+    access_token: str = Depends(get_access_token),
+):
+    return list_branch_positions(
+        _owner_id(user),
+        [str(value) for value in thread_id],
+        access_token,
+    )
+
+
+@position_router.put("/{thread_id}", response_model=BranchPositionResponse)
+def put_branch_position(
+    thread_id: UUID,
+    body: BranchPositionUpdate,
+    user=Depends(get_current_user),
+    access_token: str = Depends(get_access_token),
+):
+    try:
+        return save_branch_position(
+            _owner_id(user),
+            str(thread_id),
+            body.position_x,
+            body.position_y,
+            access_token,
+        )
+    except BranchCommentForbiddenError:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "BRANCH_POSITION_FORBIDDEN",
+                "message": "접근할 수 있는 브랜치의 위치만 저장할 수 있습니다.",
+            },
+        )
+    except BranchCommentNotFoundError:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "BRANCH_POSITION_SAVE_FAILED",
+                "message": "브랜치 위치를 저장하지 못했습니다.",
+            },
+        )
+
+
+@position_router.delete("")
+def reset_branch_positions(
+    thread_id: List[UUID] = Query(..., min_length=1, max_length=100),
+    user=Depends(get_current_user),
+    access_token: str = Depends(get_access_token),
+):
+    try:
+        deleted_count = delete_branch_positions(
+            _owner_id(user),
+            [str(value) for value in thread_id],
+            access_token,
+        )
+    except BranchCommentForbiddenError:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "BRANCH_POSITION_FORBIDDEN",
+                "message": "접근할 수 있는 브랜치의 위치만 초기화할 수 있습니다.",
+            },
+        )
+    return {"ok": True, "deleted_count": deleted_count}
+
+
 def _normalize_message_comments(comments, user) -> None:
     current_user_id = _owner_id(user)
     _normalize_comment_authors(comments, user)
@@ -249,7 +327,7 @@ def get_comments(
     message_index: int | None = Query(
         default=None,
         ge=0,
-        lt=2_147_483_647,
+        lt=BRANCH_NODE_POSITION_MESSAGE_INDEX,
     ),
     user=Depends(get_current_user),
     access_token: str = Depends(get_access_token),
@@ -259,7 +337,7 @@ def get_comments(
         raise HTTPException(status_code=404, detail="Thread not found")
     filters = [
         f"thread_id=eq.{quote(thread_id)}",
-        f"message_index=lt.{BRANCH_COMMENT_MESSAGE_INDEX}",
+        f"message_index=lt.{BRANCH_NODE_POSITION_MESSAGE_INDEX}",
         "select=id,thread_id,message_index,user_id,content,created_at",
         "order=message_index.asc,created_at.asc",
     ]
@@ -295,7 +373,7 @@ def update_comment(
                 f"id=eq.{quote(str(comment_id))}",
                 f"thread_id=eq.{quote(thread_id)}",
                 f"user_id=eq.{quote(owner_id)}",
-                f"message_index=lt.{BRANCH_COMMENT_MESSAGE_INDEX}",
+                f"message_index=lt.{BRANCH_NODE_POSITION_MESSAGE_INDEX}",
             ]
         ),
         {"content": body.content.strip()},
@@ -321,7 +399,7 @@ def delete_comment(
             f"id=eq.{quote(comment_id)}",
             f"thread_id=eq.{quote(thread_id)}",
             f"user_id=eq.{quote(_owner_id(user))}",
-            f"message_index=lt.{BRANCH_COMMENT_MESSAGE_INDEX}",
+            f"message_index=lt.{BRANCH_NODE_POSITION_MESSAGE_INDEX}",
         ]),
         access_token,
     )

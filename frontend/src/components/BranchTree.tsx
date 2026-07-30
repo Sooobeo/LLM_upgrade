@@ -17,7 +17,10 @@ import {
   createBranchNodeComment,
   deleteBranchNodeComment,
   listBranchNodeComments,
+  listBranchNodePositions,
+  resetBranchNodePositions,
   updateBranchNodeComment,
+  updateBranchNodePosition,
 } from "@/lib/threadApi";
 import { DeleteConfirmModal } from "./DeleteConfirmModal";
 
@@ -118,6 +121,9 @@ function rectangleConnectionGeometry(
   toWidth: number,
   toHeight: number,
   minimumCurve = 72,
+  horizontalCurveRatio = 0.45,
+  verticalCurveRatio = 0,
+  verticalBendRatio = 0,
 ) {
   const fromCenterX = from.x + fromWidth / 2;
   const toCenterX = to.x + toWidth / 2;
@@ -127,13 +133,19 @@ function rectangleConnectionGeometry(
   const startY = from.y + fromHeight / 2;
   const endY = to.y + toHeight / 2;
   const direction = travelsRight ? 1 : -1;
+  const verticalDelta = endY - startY;
   const curve = Math.max(
     minimumCurve,
-    Math.abs(endX - startX) * 0.45,
+    Math.abs(endX - startX) * horizontalCurveRatio +
+      Math.abs(verticalDelta) * verticalCurveRatio,
+  );
+  const verticalBend = Math.max(
+    -110,
+    Math.min(110, verticalDelta * verticalBendRatio),
   );
 
   return {
-    path: `M ${startX} ${startY} C ${startX + direction * curve} ${startY}, ${endX - direction * curve} ${endY}, ${endX} ${endY}`,
+    path: `M ${startX} ${startY} C ${startX + direction * curve} ${startY + verticalBend}, ${endX - direction * curve} ${endY - verticalBend}, ${endX} ${endY}`,
     startX,
     startY,
     endX,
@@ -164,6 +176,9 @@ function commentConnectionGeometry(from: Position, to: Position) {
     COMMENT_RADIUS * 2,
     COMMENT_RADIUS * 2,
     14,
+    0.72,
+    0.34,
+    0.42,
   );
 }
 
@@ -197,6 +212,7 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
     [layout.nodes],
   );
   const [positions, setPositions] = useState(layout.initialPositions);
+  const [positionsLoading, setPositionsLoading] = useState(true);
   const [comments, setComments] = useState<BranchNodeComment[]>([]);
   const [commentsLoading, setCommentsLoading] = useState(true);
   const [commentError, setCommentError] = useState<string | null>(null);
@@ -217,6 +233,8 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
     pointerId: number;
     originX: number;
     originY: number;
+    currentX: number;
+    currentY: number;
     startX: number;
     startY: number;
     moved: boolean;
@@ -247,6 +265,58 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
     setSelectedCommentId(null);
     setEditingCommentId(null);
   }, [layout]);
+
+  useEffect(() => {
+    let active = true;
+    setPositionsLoading(true);
+
+    listBranchNodePositions(threadIds, token)
+      .then((savedPositions) => {
+        if (!active) return;
+        setPositions({
+          ...layout.initialPositions,
+          ...Object.fromEntries(
+            savedPositions
+              .filter((position) => threadIds.includes(position.thread_id))
+              .map((position) => [
+                position.thread_id,
+                {
+                  x: clamp(
+                    position.position_x,
+                    10,
+                    layout.width - NODE_WIDTH - 10,
+                  ),
+                  y: clamp(
+                    position.position_y,
+                    10,
+                    layout.height - NODE_HEIGHT - 10,
+                  ),
+                },
+              ]),
+          ),
+        });
+      })
+      .catch((error) => {
+        if (active) {
+          setCommentError(
+            errorMessage(error, "저장된 브랜치 위치를 불러오지 못했습니다."),
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setPositionsLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    layout.height,
+    layout.initialPositions,
+    layout.width,
+    threadIds,
+    token,
+  ]);
 
   useEffect(() => {
     let active = true;
@@ -458,7 +528,7 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
     nodeId: string,
   ) => {
     const position = positions[nodeId];
-    if (!position) return;
+    if (!position || busyAction || positionsLoading) return;
 
     event.currentTarget.setPointerCapture(event.pointerId);
     nodeDragRef.current = {
@@ -466,6 +536,8 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
       pointerId: event.pointerId,
       originX: position.x,
       originY: position.y,
+      currentX: position.x,
+      currentY: position.y,
       startX: event.clientX,
       startY: event.clientY,
       moved: false,
@@ -479,25 +551,29 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
     const deltaX = (event.clientX - drag.startX) / renderScale;
     const deltaY = (event.clientY - drag.startY) / renderScale;
     if (Math.abs(deltaX) + Math.abs(deltaY) > 4) drag.moved = true;
+    drag.currentX = clamp(
+      drag.originX + deltaX,
+      10,
+      layout.width - NODE_WIDTH - 10,
+    );
+    drag.currentY = clamp(
+      drag.originY + deltaY,
+      10,
+      layout.height - NODE_HEIGHT - 10,
+    );
 
     setPositions((current) => ({
       ...current,
       [drag.id]: {
-        x: clamp(
-          drag.originX + deltaX,
-          10,
-          layout.width - NODE_WIDTH - 10,
-        ),
-        y: clamp(
-          drag.originY + deltaY,
-          10,
-          layout.height - NODE_HEIGHT - 10,
-        ),
+        x: drag.currentX,
+        y: drag.currentY,
       },
     }));
   };
 
-  const finishNodeDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
+  const finishNodeDrag = async (
+    event: ReactPointerEvent<HTMLButtonElement>,
+  ) => {
     const drag = nodeDragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
 
@@ -513,6 +589,56 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
       }, 0);
     }
     nodeDragRef.current = null;
+    if (!drag.moved) return;
+
+    setBusyAction(`move-node:${drag.id}`);
+    setCommentError(null);
+    try {
+      const saved = await updateBranchNodePosition(
+        drag.id,
+        {
+          position_x: drag.currentX,
+          position_y: drag.currentY,
+        },
+        token,
+      );
+      setPositions((current) => ({
+        ...current,
+        [drag.id]: {
+          x: saved.position_x,
+          y: saved.position_y,
+        },
+      }));
+    } catch (error) {
+      setPositions((current) => ({
+        ...current,
+        [drag.id]: {
+          x: drag.originX,
+          y: drag.originY,
+        },
+      }));
+      setCommentError(
+        errorMessage(error, "브랜치 위치를 저장하지 못했습니다."),
+      );
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const resetNodePositions = async () => {
+    if (busyAction || positionsLoading) return;
+    setBusyAction("reset-nodes");
+    setCommentError(null);
+    try {
+      await resetBranchNodePositions(threadIds, token);
+      setPositions(layout.initialPositions);
+    } catch (error) {
+      setCommentError(
+        errorMessage(error, "브랜치 위치를 원래대로 돌리지 못했습니다."),
+      );
+    } finally {
+      setBusyAction(null);
+    }
   };
 
   const startCommentDrag = (
@@ -729,6 +855,18 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
       onPointerUp={finishCanvasPointer}
       onPointerCancel={finishCanvasPointer}
     >
+      <button
+        type="button"
+        onClick={() => void resetNodePositions()}
+        disabled={Boolean(busyAction) || positionsLoading}
+        className="absolute left-2 top-2 z-30 inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-cyan-200/20 bg-slate-950/85 px-3 py-2 text-[11px] font-semibold text-cyan-50 shadow-lg backdrop-blur transition hover:border-cyan-200/35 hover:bg-cyan-300/10 disabled:cursor-wait disabled:opacity-50 sm:left-3 sm:top-3"
+      >
+        {busyAction === "reset-nodes" && (
+          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-cyan-100 border-t-transparent" />
+        )}
+        원래대로
+      </button>
+
       <div
         aria-label="화면 배율 조절"
         title="버튼 또는 두 손가락 제스처로 확대·축소"
@@ -759,7 +897,6 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
           type="button"
           onClick={() => {
             setZoom(1);
-            setPositions(layout.initialPositions);
           }}
           className="min-h-9 rounded-lg border border-white/15 px-2 py-1.5 text-[10px] text-white/80 transition hover:bg-white/10 sm:px-2.5 sm:text-[11px]"
         >
@@ -771,6 +908,7 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
       <div className="pointer-events-none absolute bottom-2 left-2 z-30 max-w-[calc(100%-1rem)] truncate rounded-full border border-white/10 bg-slate-950/75 px-2.5 py-1.5 text-[10px] font-medium text-cyan-100/80 backdrop-blur sm:bottom-3 sm:left-3 sm:px-3">
         {layout.edges.length}개 브랜치 · {comments.length}개 코멘트
         {commentsLoading ? " · 불러오는 중" : ""}
+        {positionsLoading ? " · 위치 불러오는 중" : ""}
       </div>
 
       {commentError && (
@@ -921,8 +1059,8 @@ export function BranchTree({ root, token, onSelect, onDelete }: Props) {
                 type="button"
                 onPointerDown={(event) => startNodeDrag(event, node.id)}
                 onPointerMove={moveNodeDrag}
-                onPointerUp={finishNodeDrag}
-                onPointerCancel={finishNodeDrag}
+                onPointerUp={(event) => void finishNodeDrag(event)}
+                onPointerCancel={(event) => void finishNodeDrag(event)}
                 onClick={() => {
                   if (suppressCanvasClickRef.current) return;
                   if (ignoreNodeClickRef.current === node.id) return;

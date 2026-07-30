@@ -1154,6 +1154,7 @@ def get_thread_detail(user_id: str, thread_id: str, access_token: str):
     thread["messages"] = messages
     thread["can_rename"] = thread["owner_id"] == user_id
     thread["parent_thread_id"] = metadata.get("parent_thread_id")
+    thread["root_thread_id"] = metadata.get("root_thread_id")
     thread["context_preview"] = metadata.get("context_preview")
     is_root = (
         not metadata.get("parent_thread_id")

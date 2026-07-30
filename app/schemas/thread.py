@@ -52,6 +52,7 @@ class ThreadDetailResp(BaseModel):
     can_rename: bool = False
     messages: List[MessageOut]
     parent_thread_id: Optional[str] = None
+    root_thread_id: Optional[str] = None
     context_preview: Optional[str] = None
 
 class MessageRow(BaseModel):

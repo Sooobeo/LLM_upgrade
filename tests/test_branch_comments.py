@@ -178,6 +178,118 @@ class BranchCommentRepositoryTests(unittest.TestCase):
         self.assertEqual(comments[0]["author_id"], "owner.name")
         self.assertEqual(comments[1]["author_id"], "team.member")
 
+    def test_branch_position_payload_round_trip(self):
+        encoded = repository._encode_branch_position(321.25, 88)
+        decoded = repository._decode_branch_position(
+            {
+                "thread_id": "thread-1",
+                "content": encoded,
+                "created_at": "2026-07-30T00:00:00+00:00",
+            }
+        )
+
+        self.assertEqual(
+            decoded,
+            {
+                "thread_id": "thread-1",
+                "position_x": 321.25,
+                "position_y": 88.0,
+                "created_at": "2026-07-30T00:00:00+00:00",
+            },
+        )
+
+    def test_save_branch_position_updates_only_current_users_reserved_row(self):
+        updated = []
+
+        def select(table, query, access_token):
+            if table == "threads":
+                return [
+                    {
+                        "id": "thread-1",
+                        "owner_id": "owner-1",
+                        "is_workspace": False,
+                    }
+                ]
+            if table == "thread_members":
+                return []
+            if "select=id,thread_id,content,created_at" in query:
+                return [
+                    {
+                        "id": "position-1",
+                        "thread_id": "thread-1",
+                        "content": repository._encode_branch_position(10, 20),
+                        "created_at": None,
+                    }
+                ]
+            return []
+
+        def update(table, query, values, access_token):
+            updated.append((query, values))
+            return [
+                {
+                    "id": "position-1",
+                    "thread_id": "thread-1",
+                    "content": values["content"],
+                    "created_at": None,
+                }
+            ]
+
+        with (
+            patch.object(repository.sb, "rest_select", side_effect=select),
+            patch.object(repository.sb, "rest_update", side_effect=update),
+        ):
+            result = repository.save_branch_position(
+                "owner-1",
+                "thread-1",
+                140,
+                260,
+                "token",
+            )
+
+        self.assertEqual(result["position_x"], 140)
+        self.assertEqual(result["position_y"], 260)
+        self.assertIn("user_id=eq.owner-1", updated[0][0])
+        self.assertIn(
+            f"message_index=eq.{repository.BRANCH_NODE_POSITION_MESSAGE_INDEX}",
+            updated[0][0],
+        )
+
+    def test_reset_branch_positions_is_scoped_to_user_and_requested_threads(self):
+        def select(table, query, access_token):
+            if table == "threads":
+                return [
+                    {
+                        "id": "thread-1",
+                        "owner_id": "owner-1",
+                        "is_workspace": False,
+                    },
+                    {
+                        "id": "thread-2",
+                        "owner_id": "owner-1",
+                        "is_workspace": False,
+                    },
+                ]
+            return []
+
+        with (
+            patch.object(repository.sb, "rest_select", side_effect=select),
+            patch.object(repository.sb, "rest_delete", return_value=2) as delete,
+        ):
+            deleted = repository.delete_branch_positions(
+                "owner-1",
+                ["thread-1", "thread-2"],
+                "token",
+            )
+
+        self.assertEqual(deleted, 2)
+        query = delete.call_args.args[1]
+        self.assertIn("thread_id=in.(thread-1,thread-2)", query)
+        self.assertIn("user_id=eq.owner-1", query)
+        self.assertIn(
+            f"message_index=eq.{repository.BRANCH_NODE_POSITION_MESSAGE_INDEX}",
+            query,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
