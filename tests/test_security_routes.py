@@ -85,14 +85,14 @@ def test_google_session_accepts_allowlisted_deployed_frontend(monkeypatch):
                 "Origin": frontend_origin,
                 "Sec-Fetch-Site": "cross-site",
             },
-            json={"refresh_token": "initial-refresh-token"},
+            json={"refresh_token": "short-token"},
         )
     finally:
         app.dependency_overrides.pop(get_current_user, None)
 
     assert response.status_code == 200
     assert response.json()["access_token"] == "access-token"
-    assert "refresh_token=initial-refresh-token" in response.headers["set-cookie"]
+    assert "refresh_token=short-token" in response.headers["set-cookie"]
     assert "HttpOnly" in response.headers["set-cookie"]
 
 

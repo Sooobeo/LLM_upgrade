@@ -55,19 +55,26 @@ async function createGoogleSession(
   }
 
   const accessToken = authorization?.replace(/^Bearer\s+/i, "").trim() || "";
-  if (
-    accessToken.length < 20 ||
-    accessToken.length > 8192 ||
-    refreshToken.length < 20 ||
-    refreshToken.length > 4096
-  ) {
+  const invalidToken =
+    !accessToken
+      ? {
+          code: "MISSING_OAUTH_ACCESS_TOKEN",
+          message: "Google access token이 없습니다.",
+        }
+      : !refreshToken
+        ? {
+            code: "MISSING_OAUTH_REFRESH_TOKEN",
+            message: "Google refresh token이 없습니다.",
+          }
+        : accessToken.length > 8192 || refreshToken.length > 4096
+          ? {
+              code: "OAUTH_TOKEN_TOO_LARGE",
+              message: "Google 로그인 정보의 크기가 올바르지 않습니다.",
+            }
+          : null;
+  if (invalidToken) {
     return NextResponse.json(
-      {
-        detail: {
-          code: "INVALID_OAUTH_SESSION",
-          message: "Google 로그인 정보가 올바르지 않습니다.",
-        },
-      },
+      { detail: invalidToken },
       { status: 400 },
     );
   }

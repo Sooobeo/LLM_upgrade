@@ -30,7 +30,10 @@ from app.schemas.auth import (
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 class GoogleRefreshBody(BaseModel):
-    refresh_token: str = Field(..., min_length=20, max_length=4096)
+    # Supabase refresh tokens are opaque and their length is not a stable API
+    # contract. Validate presence/size only; the matching access token is
+    # verified before this value is persisted.
+    refresh_token: str = Field(..., min_length=1, max_length=4096)
 
 
 class GoogleLoginUrlResponse(BaseModel):
