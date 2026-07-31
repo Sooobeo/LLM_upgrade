@@ -6,7 +6,7 @@ type Props = {
   onAdd: (text: string) => void;
 };
 
-export function WorkspaceCommentInput({ onAdd }: Props) {
+export function MessageCommentInput({ onAdd }: Props) {
   const [value, setValue] = useState("");
   return (
     <div className="flex flex-col gap-2 sm:flex-row">
@@ -22,7 +22,7 @@ export function WorkspaceCommentInput({ onAdd }: Props) {
             setValue("");
           }
         }}
-        placeholder="코멘트 추가"
+        placeholder="코멘트를 입력하세요"
         className="min-h-10 min-w-0 flex-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-white placeholder:text-white/40 focus:outline-none focus:ring-1 focus:ring-blue-400"
       />
       <button

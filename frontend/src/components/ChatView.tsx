@@ -37,7 +37,7 @@ import { ThreadSearchBar } from './ThreadSearchBar';
 import { supabase } from '@/lib/supabaseClient';
 import { auth } from '@/lib/auth';
 import { InlineLoginPrompt } from './InlineLoginPrompt';
-import { WorkspaceCommentInput } from './WorkspaceCommentInput';
+import { MessageCommentInput } from './MessageCommentInput';
 
 const UUID_REGEX = /^[0-9a-fA-F-]{36}$/;
 const SUMMARY_PREVIEW_MAX_CHARS = 800;
@@ -150,8 +150,8 @@ export function ChatView() {
   }, []);
 
   const resolveCommentTargetId = (message: ChatMessage, idx: number) => {
-    if (message.id) return `id:${message.id}`;
     if (typeof message.index === 'number') return `index:${message.index}`;
+    if (message.id) return `id:${message.id}`;
     return `idx:${idx}`;
   };
 
@@ -916,10 +916,8 @@ export function ChatView() {
                   const isMessageBlock = typeof m?.content === 'string';
                   const messageIndex = resolveMessageIndex(m);
                   const showCommentUI =
-                    isWorkspace &&
                     isThreadScreen &&
                     isMessageBlock &&
-                    m.role === 'assistant' &&
                     !!commentTargetId &&
                     messageIndex != null;
                   const messageComments = comments[commentTargetId] || [];
@@ -1062,7 +1060,7 @@ export function ChatView() {
                               })}
                             </div>
 
-                            <WorkspaceCommentInput
+                            <MessageCommentInput
                               onAdd={(text) => {
                                 if (messageIndex != null) {
                                   void addComment(messageIndex, text);
