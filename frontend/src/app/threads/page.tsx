@@ -138,7 +138,7 @@ export default function ThreadsPage() {
     }
     auth.clear();
     await supabase?.auth.signOut();
-    router.push("/login");
+    router.replace("/");
   };
 
   const queryClient = useQueryClient();
