@@ -96,6 +96,71 @@ class ThreadBranchRepositoryTests(unittest.IsolatedAsyncioTestCase):
                     requested_model="gemini-2.5-flash",
                 )
 
+    async def test_create_branch_accepts_current_model_for_legacy_thread(self):
+        inserted = []
+        legacy_metadata = repository._encode_branch_metadata(
+            {
+                "version": 1,
+                "parent_thread_id": None,
+                "root_thread_id": "parent-thread",
+                "model": "gemini-2.5-flash",
+            }
+        )
+
+        def select(table, query, access_token):
+            if table == "threads":
+                return [
+                    {
+                        "id": "parent-thread",
+                        "title": "원본",
+                        "owner_id": "owner-1",
+                        "is_workspace": False,
+                    }
+                ]
+            if "select=content" in query:
+                return [{"content": legacy_metadata}]
+            if "index=gte.0" in query:
+                return [
+                    {
+                        "index": 0,
+                        "role": "user",
+                        "content": "질문",
+                        "created_at": "2026-01-01T00:00:00+00:00",
+                    }
+                ]
+            return []
+
+        def insert(table, rows, access_token):
+            inserted.append((table, rows))
+            return {}
+
+        generate = AsyncMock(return_value="핵심 맥락")
+        with (
+            patch.object(repository.sb, "rest_select", side_effect=select),
+            patch.object(repository.sb, "rest_insert", side_effect=insert),
+            patch.object(repository, "uuid4", return_value="child-thread"),
+            patch.object(repository.llm_client, "generate", new=generate),
+        ):
+            result = await repository.create_thread_branch(
+                owner_id="owner-1",
+                parent_thread_id="parent-thread",
+                access_token="token",
+                requested_model="gemini-3.6-flash",
+            )
+
+        self.assertEqual(result["thread_id"], "child-thread")
+        self.assertEqual(generate.await_args.kwargs["model"], "gemini-3.6-flash")
+        child_message_rows = [
+            rows
+            for table, rows in inserted
+            if table == "messages"
+            and any(row.get("thread_id") == "child-thread" for row in rows)
+        ][0]
+        child_metadata = repository._decode_branch_metadata(
+            child_message_rows[0]["content"]
+        )
+        self.assertEqual(child_metadata["model"], "gemini-3.6-flash")
+
     async def test_create_branch_keeps_child_non_workspace_and_inherits_access(self):
         inserted = []
 

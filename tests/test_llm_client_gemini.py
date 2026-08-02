@@ -60,7 +60,9 @@ class GeminiClientTests(IsolatedAsyncioTestCase):
 
     async def test_legacy_2_5_model_uses_compatibility_model(self):
         original_key = settings.GEMINI_API_KEY
+        original_compat_model = settings.GEMINI_2_5_COMPAT_MODEL
         settings.GEMINI_API_KEY = "test-key"
+        settings.GEMINI_2_5_COMPAT_MODEL = "gemini-3.6-flash"
 
         async_client = SimpleNamespace(
             models=SimpleNamespace(
@@ -80,7 +82,40 @@ class GeminiClientTests(IsolatedAsyncioTestCase):
                 )
         finally:
             settings.GEMINI_API_KEY = original_key
+            settings.GEMINI_2_5_COMPAT_MODEL = original_compat_model
 
         self.assertEqual(result, "Compatible response")
         call = async_client.models.generate_content.await_args.kwargs
-        self.assertEqual(call["model"], settings.GEMINI_2_5_COMPAT_MODEL)
+        self.assertEqual(call["model"], "gemini-3.6-flash")
+
+    async def test_legacy_2_5_model_ignores_stale_self_mapping(self):
+        original_key = settings.GEMINI_API_KEY
+        original_model = settings.GEMINI_MODEL
+        original_compat_model = settings.GEMINI_2_5_COMPAT_MODEL
+        settings.GEMINI_API_KEY = "test-key"
+        settings.GEMINI_MODEL = "gemini-2.5-flash"
+        settings.GEMINI_2_5_COMPAT_MODEL = "gemini-2.5-flash"
+
+        async_client = SimpleNamespace(
+            models=SimpleNamespace(
+                generate_content=AsyncMock(
+                    return_value=SimpleNamespace(text="Compatible response"),
+                )
+            ),
+            aclose=AsyncMock(),
+        )
+        client = SimpleNamespace(aio=async_client)
+
+        try:
+            with patch.object(llm_client.genai, "Client", return_value=client):
+                await llm_client.generate(
+                    "gemini-2.5-flash",
+                    [{"role": "user", "content": "Hello"}],
+                )
+        finally:
+            settings.GEMINI_API_KEY = original_key
+            settings.GEMINI_MODEL = original_model
+            settings.GEMINI_2_5_COMPAT_MODEL = original_compat_model
+
+        call = async_client.models.generate_content.await_args.kwargs
+        self.assertEqual(call["model"], "gemini-3.6-flash")

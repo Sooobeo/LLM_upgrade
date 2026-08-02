@@ -41,6 +41,15 @@ def test_settings_can_start_and_report_missing_supabase_configuration():
     ]
 
 
+def test_default_gemini_model_uses_current_flash(monkeypatch):
+    monkeypatch.delenv("GEMINI_MODEL", raising=False)
+    monkeypatch.delenv("GEMINI_2_5_COMPAT_MODEL", raising=False)
+    config = Settings(_env_file=None)
+
+    assert config.GEMINI_MODEL == "gemini-3.6-flash"
+    assert config.GEMINI_2_5_COMPAT_MODEL == "gemini-3.6-flash"
+
+
 def test_vercel_preview_origin_is_narrowly_allowlisted():
     config = Settings(
         _env_file=None,

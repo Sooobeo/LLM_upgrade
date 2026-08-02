@@ -1,5 +1,5 @@
 const GEMINI_MODEL =
-  process.env.NEXT_PUBLIC_GEMINI_MODEL || "gemini-2.5-flash";
+  process.env.NEXT_PUBLIC_GEMINI_MODEL || "gemini-3.6-flash";
 
 export const MODEL_OPTIONS = [
   "gemma3:270m",

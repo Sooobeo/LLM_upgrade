@@ -16,6 +16,9 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+LEGACY_GEMINI_FLASH_MODEL = "gemini-2.5-flash"
+CURRENT_GEMINI_FLASH_MODEL = "gemini-3.6-flash"
+
 
 class LLMUpstreamError(RuntimeError):
     def __init__(
@@ -80,11 +83,7 @@ def describe_llm_config(model: Optional[str] = None) -> Dict[str, Any]:
         },
         "gemini": {
             "model": settings.GEMINI_MODEL,
-            "effective_model": (
-                settings.GEMINI_2_5_COMPAT_MODEL
-                if settings.GEMINI_MODEL == "gemini-2.5-flash"
-                else settings.GEMINI_MODEL
-            ),
+            "effective_model": resolve_gemini_model(settings.GEMINI_MODEL),
             "configured": bool((settings.GEMINI_API_KEY or "").strip()),
         },
     }
@@ -101,6 +100,24 @@ def validate_llm_config() -> None:
 
 def _is_gemini_model(model: str) -> bool:
     return (model or "").lower().startswith("gemini-")
+
+
+def resolve_gemini_model(model: str) -> str:
+    """Resolve legacy Gemini model IDs, including stale deployment settings."""
+    requested_model = (model or "").strip()
+    if requested_model.lower() != LEGACY_GEMINI_FLASH_MODEL:
+        return requested_model
+
+    candidates = (
+        settings.GEMINI_2_5_COMPAT_MODEL,
+        settings.GEMINI_MODEL,
+        CURRENT_GEMINI_FLASH_MODEL,
+    )
+    for candidate in candidates:
+        resolved = (candidate or "").strip()
+        if resolved and resolved.lower() != LEGACY_GEMINI_FLASH_MODEL:
+            return resolved
+    return CURRENT_GEMINI_FLASH_MODEL
 
 
 def _build_gemini_contents(
@@ -151,11 +168,7 @@ async def _generate_gemini(
             code="EMPTY_PROMPT",
         )
 
-    effective_model = (
-        settings.GEMINI_2_5_COMPAT_MODEL
-        if model == "gemini-2.5-flash"
-        else model
-    )
+    effective_model = resolve_gemini_model(model)
     if effective_model != model:
         logger.warning(
             "Gemini compatibility model override",

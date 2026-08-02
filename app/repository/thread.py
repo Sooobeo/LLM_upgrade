@@ -541,8 +541,13 @@ async def create_thread_branch(
     model = requested_model or stored_model
     if not model or not str(model).lower().startswith("gemini-"):
         raise BranchModelError("Branching is available only for Gemini threads")
-    if stored_model and requested_model and stored_model != requested_model:
-        raise BranchModelError("Requested model does not match the thread model")
+    if stored_model and requested_model:
+        stored_effective_model = llm_client.resolve_gemini_model(str(stored_model))
+        requested_effective_model = llm_client.resolve_gemini_model(
+            str(requested_model)
+        )
+        if stored_effective_model != requested_effective_model:
+            raise BranchModelError("Requested model does not match the thread model")
 
     messages = sb.rest_select(
         "messages",

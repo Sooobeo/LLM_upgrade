@@ -96,9 +96,9 @@ class Settings(BaseSettings):
 
     # --- Google Gemini ---
     GEMINI_API_KEY: str | None = None
-    GEMINI_MODEL: str = "gemini-2.5-flash"
-    # Google이 신규 키에 2.5 Flash 제공을 종료하여 호환 실행에 사용합니다.
-    GEMINI_2_5_COMPAT_MODEL: str = "gemini-2.5-flash"
+    GEMINI_MODEL: str = "gemini-3.6-flash"
+    # 이전 프론트/로컬 저장소가 2.5 Flash를 요청할 때 사용할 대체 모델입니다.
+    GEMINI_2_5_COMPAT_MODEL: str = "gemini-3.6-flash"
     GEMINI_TIMEOUT_SECS: float = 120.0
 
     # --- 쿠키/도메인 (프록시형 API 만들 때 사용) ---
